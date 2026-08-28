@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>ODG Reserve Calculator DEV (API Adapter) Web Service Tester</title>
+		<!-- Calculator Stylesheet & Javascript (Begin) -->
+      <link rel="stylesheet" type="text/css" href="css/reset.css"/>
+      <link rel="stylesheet" type="text/css" href="css/text.css"/>
+      <link rel="stylesheet" type="text/css" href="css/960_12_col.css"/>
+		<script type="text/javascript" src="jscripts/jquery-1.9.1.min.js"></script>
+		<script type="text/javascript" src="jscripts/jquery.blockUI.js"></script>
+		<script type="text/javascript" src="jscripts/formatData.js"></script>
+		<script type="text/javascript" src="jscripts/moment.js"></script>
+		<script type="text/javascript" src="jscripts/purify.min.js"></script>
+		<style type="text/css">
+			body { font-family: "Arial", Helvetica, sans-serif; font-size:12px; }
+			.input { border: 1px #000000 solid; }
+			label, .bold { font-weight: 700; }
+			#responseTime { color: #ff00ff; }
+			p { margin-bottom: 5px; }
+			#request { white-space: pre; overflow: scroll; padding: 5px; }
+			#result { white-space: pre; overflow: scroll; padding: 5px; }
+			.center { text-align: center; }
+			.home { float: right; }
+			.hide { visibility : hidden; }
+			.show { visibility : show; }
+		</style>
+		<script type="text/javascript">
+			$(document).ready(function() {
+				// dol jbc class change event
+				$('#jobclass').change(function(event) {
+					if($(this).val() == 'ncci') {
+						$('#nccicode').removeClass("hide").addClass("show");
+					}
+					else {
+						$('#nccicode').val('');
+						$('#nccicode').removeClass("show").addClass("hide");
+					}
+				});
+
+				// if submit is clicked
+				$('#submit').click(function(event) {
+					// clear response time
+					$('#responseTime').html('');
+					event.preventDefault();	// stop form submit
+					$('#result').text('');	// clear previous result
+					// build xml - begin
+					var inXML = '<reservecalc>';
+					// get all icd codes
+					if($("#icdcodes").val().length) {
+					var icdcodes = DOMPurify.sanitize($("#icdcodes").val()).split('~');
+						inXML += '<icdcodes>';
+					for(var i = 0; i < icdcodes.length; i++) {
+						inXML += '<code>' + icdcodes[i].trim() + '</code>';
+						}
+					inXML += '</icdcodes>';
+					}
+					if($('#clientid').val().length) {
+						inXML += '<clientid>' + DOMPurify.sanitize($('#clientid').val()) + '</clientid>';
+					}
+					if($('#state').val().length) {
+						var countryState = $('#state').val().split('~');
+						if(countryState[0] != 'US') {
+							inXML += '<country>' + countryState[0] + '</country>';
+						}
+						inXML += '<state>' + countryState[1] + '</state>';
+					}
+					if($('#age').val().length) {
+						inXML += '<age>' + DOMPurify.sanitize($('#age').val()) + '</age>';
+					}
+          if($('#jds').val().length) {
+              inXML += '<jds>' + $('#jds').val() + '</jds>';
+          }
+					if($('#datatype').val().length) {
+						inXML += '<datatype>' + $('#datatype').val() + '</datatype>';
+					}
+					if($('#jobclass').val().length) {
+						inXML += '<jobclass>' + (($('#jobclass').val() == 'ncci') ? DOMPurify.sanitize($('#nccicode').val()) : $('#jobclass').val()) + '</jobclass>';
+					}
+					if($('#bpcode').val().length) {
+						inXML += '<bpcode>' + DOMPurify.sanitize($('#bpcode').val()) + '</bpcode>';
+					}
+					if($('#noicode').val().length) {
+						inXML += '<noicode>' +DOMPurify.sanitize($('#noicode').val()) + '</noicode>';
+					}
+					if($('#aww').val().length) {
+						inXML += '<aww>' + DOMPurify.sanitize($('#aww').val()) + '</aww>';
+					}
+					if($('#edl').val().length) {
+						inXML += '<edl>' + DOMPurify.sanitize($('#edl').val()) + '</edl>';
+					}
+					if($('#comprate').val().length) {
+						inXML += '<comprate>' + DOMPurify.sanitize($('#comprate').val()) + '</comprate>';
+					}
+					if($('#mdd').val().length) {
+						inXML += '<mdd>' + DOMPurify.sanitize($('#mdd').val()) + '</mdd>';
+					}
+					if($('#lostwages').val().length) {
+						inXML += '<lostwages>' + DOMPurify.sanitize($('#lostwages').val()) + '</lostwages>';
+					}
+					if($('#medicalonly').is(':checked')) {
+						inXML += '<medicalonly>1</medicalonly>';
+					}
+					if(($("input[name='output']:checked").val() == 'F')) {
+						inXML += '<fulloutput>Y</fulloutput>';
+					}
+					// add confounding factors
+					var cfactorFound = false;
+					$("input:checkbox.indemnityreserve").each(function(index) {
+						if(this.checked) {
+							if(!cfactorFound) {
+								inXML += '<cfactors>';
+								cfactorFound = true;
+							}
+							if(this.id != 'opioids') {
+								inXML += '<' + this.id + '>1</' + this.id + '>';
+							}
+							else {
+								inXML += '<opioids>' + $("input[name='opioidsopt']:checked").val() + '</opioids>';
+							}
+						}
+					});
+					if(cfactorFound) {
+						inXML += '</cfactors>';
+					}
+					var procSummaryFound = false;
+					// get all icd procedure codes
+					if($("#icdprocode").val().length) {
+						procSummaryFound = true;
+						inXML += '<procsummary>';
+						inXML += '<icd>';
+						var icdprocode = DOMPurify.sanitize($("#icdprocode").val()).split('~');
+						for(var i = 0; i < icdprocode.length; i++) {
+							inXML += '<code>' + icdprocode[i].trim() + '</code>';
+						}
+						inXML += '</icd>';
+					}
+					// get all cpt procedure codes
+					if($("#cptprocode").val().length) {
+						if(!procSummaryFound) {
+							procSummaryFound = true;
+							inXML += '<procsummary>';
+						}
+						inXML += '<cpt>';
+						var cptprocode = DOMPurify.sanitize($("#cptprocode").val()).split('~');
+						for(var i = 0; i < cptprocode.length; i++) {
+							inXML += '<code>' + cptprocode[i].trim() + '</code>';
+						}
+						inXML += '</cpt>';
+					}
+					// get all ndc procedure codes
+					if($("#ndcprocode").val().length) {
+						if(!procSummaryFound) {
+							procSummaryFound = true;
+							inXML += '<procsummary>';
+						}
+						inXML += '<ndc>';
+						var ndcprocode = DOMPurify.sanitize($("#ndcprocode").val()).split('~');
+						for(var i = 0; i < ndcprocode.length; i++) {
+							inXML += '<code>' + ndcprocode[i].trim() + '</code>';
+						}
+						inXML += '</ndc>';
+					}
+					// get all hcpcs procedure codes
+					if($("#hcpcsprocode").val().length) {
+						if(!procSummaryFound) {
+							procSummaryFound = true;
+							inXML += '<procsummary>';
+						}
+						inXML += '<hcpcs>';
+						var hcpcsprocode = DOMPurify.sanitize($("#hcpcsprocode").val()).split('~');
+						for(var i = 0; i < hcpcsprocode.length; i++) {
+							inXML += '<code>' + hcpcsprocode[i].trim() + '</code>';
+						}
+						inXML += '</hcpcs>';
+					}
+					if(procSummaryFound) {
+						inXML += '</procsummary>';
+					}
+					inXML += '</reservecalc>';
+					$('#request').text(formatXml(inXML));
+					// build xml - end
+					var startTimeStamp ;
+					var endTimeStamp;								   
+					$.ajax({
+					  type: 'POST',
+					  url: 'http://localhost:3000/calculator/reserve' + (($("input[name='format']:checked").val() == 'JSON') ? '/format/json' : ''),
+					  data: inXML,
+					  contentType: 'application/xml; charset=utf-8',
+					  cache: false,
+					  beforeSend: function (request) {
+   	             $.blockUI();
+   	             request.setRequestHeader("X-ODG-KEY", $('#apikey').val());
+   	             startTimeStamp = moment();
+       		     },
+					  async: true,
+					  dataType: 'text',
+					  success: function(outData) {
+					  	  endTimeStamp = moment();
+					     // format output
+					  	  if($("input[name='format']:checked").val() == 'JSON') {
+					  	     $('#result').text(formatJson(outData));
+					  	  }
+					  	  else {
+					     	  $('#result').text(formatXml(outData));
+					     }
+					  },
+					  error: function(xhr) {
+					  	  endTimeStamp = moment();
+					  	  if($("input[name='format']:checked").val() == 'JSON') {
+					  	  		var jsonText = formatJson(xhr.responseText);
+					  	  		if(jsonText) {
+					  	  			$('#result').text(jsonText);
+					  	  		}
+					  	  		else {
+					  	  			$('#result').text(xhr.responseText);
+					  	  		}
+					  	  }
+					  	  else {
+					     	  $('#result').text(formatXml(xhr.responseText));
+					     }
+					  },
+					  complete: function() { 
+						  $('#responseTime').html('<b>Start Time: ' + startTimeStamp.format('hh:mm:ss.SSS') + '<>End Time: ' + endTimeStamp.format('hh:mm:ss.SSS') + '<>Total Time: ' + endTimeStamp.diff(startTimeStamp,'seconds',true) + ' seconds</b>');
+					  	  $.unblockUI(); 
+					  }
+					});
+				})
+			});
+		</script>
+		<!-- Calculator Stylesheet & Javascript (End) -->
+	</head>
+
+   <body>
+      <!-- canvas begin -->
+      <div class="container_12" id="canvas">
+         <form name="calculator" id="calculator" method="post" action="">
+            <div class="grid_12 center" id="header" style="margin: 15px 0px 15px 0px; line-height: 24px;">
+               <p><h1>ODG v3.1.11 Reserve Calculator <font color='red'>DEV - API Adapter</font> Web Service - Tester</h1><span class="home"><a href="index.html">Go To Home Page</a></span></p>
+            </div>
+            <!-- API Key -->
+            <div class="grid_2"><p><label for="apikey">API Key:</label></p></div>
+            <div class="grid_4"><p><input type="password" name="apikey" id="apikey" size="40" value="e3cf1a3d593197bd7d2aa91afc1f9ffd5add2cd5" class="input" tabindex="105"></p></div>
+            <div class="grid_2"><p><label for="format">Output Format:</label></p></div>
+            <div class="grid_4">
+            	<p>
+                  <input type="radio" name="format" id="formatxml" value="XML" tabindex="106" checked=checked>XML
+                  <input type="radio" name="format" id="formatjson" value="JSON" tabindex="107">JSON
+	            	&nbsp;&nbsp;(
+                  <input type="radio" name="output" id="outputsmall" value="S" tabindex="108" checked=checked title="Limited Output">Small
+                  <input type="radio" name="output" id="outputfull" value="F" tabindex="109" title="Full Output, Everything">Full
+                  )
+            	</p>
+           	</div>
+            <div class="clear"></div>
+            <div class="grid_2"><p><label for="age">Client ID:</label></p></div>
+            <div class="grid_4"><p><input type="text" name="clientid" id="clientid" size="20" value="" class="input" tabindex="110"></p></div>
+            <div class="grid_2"><p><label for="datatype">Data Type:</label></p></div>
+            <div class="grid_4">
+            	<select name="datatype" id="datatype" size="1" class="input" tabindex="111">
+					<option value="">Default Data Type</option>
+					<option value="WC">WC - Worker's Compensation</option>
+					<option value="NO">NO - Non Occupational Disability</option>
+				</select>
+            </div>
+            <div class="clear"></div>
+            <!-- state and employee age -->
+            <div class="grid_2"><p><label for="state">State:</label></p></div>
+            <div class="grid_4">
+               <p>
+                  <select name="state" id="state" size="1" class="input" style="margin-left: 2px; width: 195px;" tabindex="112">
+                  	<optgroup label="Unites States">
+                  		<option value="US~US">No Designation</option>
+                  		<option value="US~AL">Alabama</option>
+                  		<option value="US~AK">Alaska</option>
+                  		<option value="US~AZ">Arizona</option>
+                  		<option value="US~AR">Arkansas</option>
+                  		<option value="US~CA">California</option>
+                  		<option value="US~CO">Colorado</option>
+                  		<option value="US~CT">Connecticut</option>
+                  		<option value="US~DE">Delaware</option>
+                  		<option value="US~DC">District of Columbia</option>
+                  		<option value="US~Fed">Federal</option>
+                  		<option value="US~FL">Florida</option>
+                  		<option value="US~GA">Georgia</option>
+                  		<option value="US~HI">Hawaii</option>
+                  		<option value="US~ID">Idaho</option>
+                  		<option value="US~IL">Illinois</option>
+                  		<option value="US~IN">Indiana</option>
+                  		<option value="US~IA">Iowa</option>
+                  		<option value="US~KS">Kansas</option>
+                  		<option value="US~KY">Kentucky</option>
+                  		<option value="US~LA">Louisiana</option>
+                  		<option value="US~ME">Maine</option>
+                  		<option value="US~MD">Maryland</option>
+                  		<option value="US~MA">Massachusetts</option>
+                  		<option value="US~MI">Michigan</option>
+                  		<option value="US~MN">Minnesota</option>
+                  		<option value="US~MS">Mississippi</option>
+                  		<option value="US~MO">Missouri</option>
+                  		<option value="US~MT">Montana</option>
+                  		<option value="US~NE">Nebraska</option>
+                  		<option value="US~NV">Nevada</option>
+                  		<option value="US~NH">New Hampshire</option>
+                  		<option value="US~NJ">New Jersey</option>
+                  		<option value="US~NM">New Mexico</option>
+                  		<option value="US~NY">New York</option>
+                  		<option value="US~NC">North Carolina</option>
+                  		<option value="US~ND">North Dakota</option>
+                  		<option value="US~OH">Ohio</option>
+                  		<option value="US~OK">Oklahoma</option>
+                  		<option value="US~OR">Oregon</option>
+                  		<option value="US~PA">Pennsylvania</option>
+                  		<option value="US~PR">Puerto Rico</option>
+                  		<option value="US~RI">Rhode Island</option>
+                  		<option value="US~SC">South Carolina</option>
+                  		<option value="US~SD">South Dakota</option>
+                  		<option value="US~TN">Tennessee</option>
+                  		<option value="US~TX">Texas</option>
+                  		<option value="US~UT">Utah</option>
+                  		<option value="US~VT">Vermont</option>
+                  		<option value="US~VA">Virginia</option
+                  		><option value="US~WA">Washington</option>
+                  		<option value="US~WV">West Virginia</option>
+                  		<option value="US~WI">Wisconsin</option>
+                  		<option value="US~WY">Wyoming</option>
+                  	</optgroup>
+                  	<optgroup label="Australia">
+                  		<option value="AU~AUS">No Designation</option>
+                  		<option value="AU~ACT">Australian Capital Territory</option>
+                  		<option value="AU~NSW">New South Wales</option>
+                  		<option value="AU~NT">Northern Territory</option>
+                  		<option value="AU~QLD">Queensland</option>
+                  		<option value="AU~SA">South Australia</option>
+                  		<option value="AU~TAS">Tasmania</option>
+                  		<option value="AU~VIC">Victoria</option>
+                  		<option value="AU~WA">Western Australia</option>
+                  	</optgroup>
+                  </select>
+                </p>
+            </div>
+            <div class="grid_2"><p><label for="age">Average Weekly Wage:</label></p></div>
+            <div class="grid_4"><p><input type="text" name="aww" id="aww" size="8" value="" class="input" tabindex="113"></p></div>
+            <div class="clear"></div>
+            <div class="grid_2"><p><label for="age">Expected Days Lost:</label></p></div>
+            <div class="grid_4"><p><input type="text" name="edl" id="edl" size="8" value="" class="input" tabindex="114"></p></div>
+            <div class="grid_2"><p><label for="age">Employee Age:</label></p></div>
+            <div class="grid_4"><p><input type="text" name="age" id="age" size="6" value="" class="input" tabindex="115"></p></div>
+            <div class="clear"></div>
+            <div class="grid_2"><p class="bold">Job Class:</label></p></div>
+				<div class="grid_4">
+            	<select name="jobclass" id="jobclass" size="1" class="input" style="margin-left: 2px; width: 145px;" tabindex="125">
+						<option value="">No Designation</option>
+						<!-- Department Of Labor -->
+						<optgroup label="DOL ">
+						<option value="1">Sedentary</option>
+						<option value="2">Light</option>
+						<option value="3">Medium</option>
+						<option value="4">Heavy</option>
+						<option value="5">Very Heavy</option>
+						</optgroup>							
+						<!-- National Council on Compensation Insurance -->
+						<optgroup label="NCCI">	
+							<option value="ncci">NCCI</option>
+						</optgroup>	
+					</select>
+					&nbsp;
+					<input type="text" name="nccicode" id="nccicode" value="" size="4" maxlength="4" class="input hide" tabindex="126">
+				</div>
+            <div class="grid_2"><p><label for="age">Compensation Rate:</label></p></div>
+            <div class="grid_4"><p><input type="text" name="comprate" id="comprate" size="8" value="" class="input" tabindex="127"></p></div>
+            <div class="clear"></div>
+            <div class="grid_2"><p><label for="age">Modified Duty Duration:</label></p></div>
+            <div class="grid_4"><p><input type="text" name="mdd" id="mdd" size="8" value="" class="input" tabindex="128"></p></div>
+            <div class="grid_2"><p><label for="age">TPD Lost Wages:</label></p></div>
+            <div class="grid_4"><p><input type="text" name="lostwages" id="lostwages" size="8" value="" class="input" tabindex="129"></p></div>
+            <div class="clear"></div>
+            <div class="grid_2"><p><label for="age">Medical Only Claim:</label></p></div>
+            <div class="grid_10"><p><input type="checkbox" name="medicalonly" id="medicalonly" tabindex="130" class="checkalign">&nbsp;Medical Only Claim (No Indemnity Costs Calculations)</p></div>
+            <div class="clear"></div>
+            <!-- confounding factors -->
+            <div class="grid_2"><p class="bold">Confounding Factors:</label></p></div>
+            <div class="grid_10">
+               <div grid class="grid_3 alpha">
+                  <input type="checkbox" name="depression" id="depression" tabindex="134" class="checkalign indemnityreserve">&nbsp;Depression/PTSD/Psychosocial
+               </div>
+               <div grid class="grid_3">
+                  <input type="checkbox" name="diabetes" id="diabetes" tabindex="135" class="checkalign indemnityreserve">&nbsp;Diabetes
+               </div>
+               <div grid class="grid_4 omega">
+                  <input type="checkbox" name="hypertension" id="hypertension" tabindex="140" class="checkalign indemnityreserve">&nbsp;Hypertension
+               </div>
+               <div grid class="grid_3 alpha">
+                  <input type="checkbox" name="legalrep" id="legalrep" tabindex="145" class="checkalign indemnityreserve">&nbsp;Legal Representation
+               </div>
+               <div grid class="grid_3">
+                  <input type="checkbox" name="obesity" id="obesity" tabindex="150" class="checkalign indemnityreserve">&nbsp;Obesity
+               </div>
+               <div grid class="grid_4 omega">
+                  <input type="checkbox" name="smoker" id="smoker" tabindex="155" class="checkalign indemnityreserve">&nbsp;Smoker
+               </div>
+               <div grid class="grid_3 alpha">
+                  <input type="checkbox" name="opioids" id="opioids" tabindex="160" class="checkalign indemnityreserve">&nbsp;Opioids
+               </div>
+               <div grid class="grid_3">
+                  <input type="checkbox" name="subabuse" id="subabuse" tabindex="165" class="checkalign indemnityreserve">&nbsp;Substance Abuse
+               </div>
+               <div grid class="grid_4 omega">
+                  <input type="checkbox" name="surgery" id="surgery" tabindex="170" class="checkalign indemnityreserve">&nbsp;Surgery or Hospital Stay
+               </div>
+               <!-- radio buttons for opioids -->
+               <div class="grid_10 alpha indemnityreserve" id="opiodisoptions">
+                  <input type="radio" name="opioidsopt" id="opioidsopt1" value="1" tabindex="171" checked="checked"><15 Days
+                  <input type="radio" name="opioidsopt" id="opioidsopt2" value="2" tabindex="172">15-30 Days
+                  <input type="radio" name="opioidsopt" id="opioidsopt3" value="3" tabindex="173">30+ Days
+               </div>
+            </div>
+            <div class="clear"></div>
+            <!-- FNOL Codes -->
+            <div class="grid_2"><p class="bold">Body Part Code:</label></p></div>
+				<div class="grid_4"><input type="text" name="bpcode" id="bpcode" value="" size="4" maxlength="2" class="input" tabindex="175"></div>
+            <div class="grid_2"><p class="bold">Nature of Injury Code:</label></p></div>
+				<div class="grid_4"><input type="text" name="noicode" id="noicode" value="" size="4" maxlength="2" class="input" tabindex="180"></div>
+            <div class="clear"></div>            
+            <!-- diagnosis codes -->
+            <div class="grid_8">
+               <div class="grid_2 alpha"><label for="icdcodes">ICD Diagnosis Codes:</label></div>
+               <div class="grid_6 omega"><p><input type="text" name="icdcodes" id="icdcodes" size="120" value="" class="input" tabindex="185" title="Tilde (~) seperated ICD codes."></p></div>
+            </div>
+				<div class="clear"></div>            
+            <!-- procedure summary codes -->
+            <div class="clear"></div>
+			   	<div class="grid_2"><p class="bold">ICD Proc Codes:</label></p></div>
+		  		<div class="grid_4"><p><input type="text" name="icdprocode" id="icdprocode" placeholder="ICD Procedure Code" size="40" value="" class="input" tabindex="200" title="Tilde (~) seperated ICD procedure codes."></p></div>
+				  <div class="grid_2"><p class="bold">CPT Proc Codes:</label></p></div>
+				  <div class="grid_4"><p><input type="text" name="cptprocode" id="cptprocode" placeholder="CPT Procedure Code" size="40" value="" class="input" tabindex="201" title="Tilde (~) seperated CPT procedure codes."></p></div>
+            <div class="clear"></div>
+				  <div class="grid_2"><p class="bold">NDC Proc Codes:</label></p></div>
+	 			  <div class="grid_4"><p><input type="text" name="ncdprocode" id="ndcprocode" placeholder="NDC Procedure Code" size="40" value="" class="input" tabindex="202" title="Tilde (~) seperated NDC procedure codes."></p></div>
+  				<div class="grid_2"><p class="bold">HCPCS Proc Codes:</label></p></div>
+				  <div class="grid_4"><p><input type="text" name="hcpcsprocode" id="hcpcsprocode" placeholder="HCPCS Procedure Code" size="40" value="" class="input" tabindex="203" title="Tilde (~) seperated HCPCS procedure codes."></p></div>
+          <div class="clear"></div>
+          <div class="grid_2"><p><label for="jds">Job Demand Score:</label></p></div>
+          <div class="grid_10"><p><input type="text" name="jds" id="jds" size="8" value="" maxlength="3" class="input" tabindex="205"></p></div>
+            <div class="clear"></div>
+         	<div class="grid_12"><p><input type="submit" name="submit" id="submit" value="Test WebService" tabindex="300" class="button"></p></div>
+         </form>
+         <br />
+         <p style="font-weight:700; padding-left:10px;">Input Request XML:</p>
+         <div class="grid_12" style='height:200px; border:1px solid #000000;' id="request"></div>
+         <p style="font-weight:700; padding-left:10px;">Output Response XML/JSON:&nbsp;&nbsp;<span id="responseTime"></span></p>
+			<div class="grid_12" style='height:400px; border:1px solid #000000;' id="result"></div>
+         <div class="clear"></div>
+         <br />
+      </div>
+   </body>
+</html>

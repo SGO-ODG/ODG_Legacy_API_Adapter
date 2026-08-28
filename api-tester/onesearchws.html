@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>ODG One Search DEV (API Adapter) Web Service Tester</title>
+		<!-- Calculator Stylesheet & Javascript (Begin) -->
+      <link rel="stylesheet" type="text/css" href="css/reset.css"/>
+      <link rel="stylesheet" type="text/css" href="css/text.css"/>
+      <link rel="stylesheet" type="text/css" href="css/960_12_col.css"/>
+		<script type="text/javascript" src="jscripts/jquery-1.9.1.min.js"></script>
+		<script type="text/javascript" src="jscripts/jquery.blockUI.js"></script>
+		<script type="text/javascript" src="jscripts/formatData.js"></script>
+		<script type="text/javascript" src="jscripts/moment.js"></script>
+		<script type="text/javascript" src="jscripts/purify.min.js"></script>
+		<style type="text/css">
+			body { font-family: "Arial", Helvetica, sans-serif; font-size:12px; }
+			.input { border: 1px #000000 solid; }
+			label, .bold { font-weight: 700; }
+			#responseTime { color: #ff00ff; }
+			p { margin-bottom: 5px; }
+			#request { white-space: pre; overflow: scroll; padding: 5px; }
+			#result { white-space: pre; overflow: scroll; padding: 5px; }
+			.center { text-align: center; }
+			.home { float: right; }
+		</style>
+		<script type="text/javascript">
+			$(document).ready(function() {
+				// if submit is clicked
+				$('#submit').click(function(event) {
+					// clear response time
+					$('#responseTime').html('');
+					event.preventDefault();	// stop form submit
+					$('#result').text('');	// clear previous result
+					// build xml - begin
+					var inXML = '<onesearch>';
+					if($('#clientid').val().length) {
+						inXML += '<clientid>' + DOMPurify.sanitize($('#clientid').val()) + '</clientid>';
+					}
+					if($('#search').val().length >= 2) {
+						inXML += '<text><![CDATA[' + DOMPurify.sanitize($('#search').val()) + ']]></text>';
+					}
+					else {
+						alert('Minimum 2 characters are required in Search field.');
+						return false;
+					}
+					inXML += '<database>';
+					if($('#icd9').is(':checked')) {
+						inXML += '<icd9>' + $('#icd9').val() + '</icd9>';
+					}
+					if($('#icd10').is(':checked')) {
+						inXML += '<icd10>' + $('#icd10').val() + '</icd10>';
+					}
+					if($('#cpt').is(':checked')) {
+						inXML += '<cpt>' + $('#cpt').val() + '</cpt>';
+					}
+					if($('#ndc').is(':checked')) {
+						inXML += '<ndc>' + $('#ndc').val() + '</ndc>';
+					}
+					if($('#proct').is(':checked')) {
+						inXML += '<proct>' + $('#proct').val() + '</proct>';
+					}
+					inXML += '</database>';
+					inXML += '</onesearch>';
+					$('#request').text(formatXml(inXML));
+					// build xml - end
+					var startTimeStamp ;
+					var endTimeStamp;								   
+					$.ajax({
+					  type: 'POST',
+					  url: 'http://localhost:3000/restws/onesearch' + (($("input[name='format']:checked").val() == 'JSON') ? '/format/json' : ''),
+					  data: inXML,
+					  contentType: 'application/xml; charset=utf-8',
+					  cache: false,
+					  beforeSend: function (request) {
+					  	 $.blockUI();
+   	             request.setRequestHeader("X-ODG-KEY", $('#apikey').val());
+   	             startTimeStamp = moment();
+       		     },
+					  async: true,
+					  dataType: 'text',
+					  success: function(outData) {
+					  	  endTimeStamp = moment();
+					     // format output
+					  	  if($("input[name='format']:checked").val() == 'JSON') {
+					  	     $('#result').text(formatJson(outData));
+					  	  }
+					  	  else {
+					     	  $('#result').text(formatXml(outData));
+					     }
+					  },
+					  error: function(xhr) {
+					  	  endTimeStamp = moment();
+					  	  if($("input[name='format']:checked").val() == 'JSON') {
+					  	  		var jsonText = formatJson(xhr.responseText);
+					  	  		if(jsonText) {
+					  	  			$('#result').text(jsonText);
+					  	  		}
+					  	  		else {
+					  	  			$('#result').text(xhr.responseText);
+					  	  		}
+					  	  }
+					  	  else {
+					     	  $('#result').text(formatXml(xhr.responseText));
+					     }
+					  },
+					  complete: function() { 
+					  	  $('#responseTime').html('<b>Start Time: ' + startTimeStamp.format('hh:mm:ss.SSS') + '<>End Time: ' + endTimeStamp.format('hh:mm:ss.SSS') + '<>Total Time: ' + endTimeStamp.diff(startTimeStamp,'seconds',true) + ' seconds</b>');
+					  	  $.unblockUI(); 
+					  }
+					});
+				})
+			});
+		</script>
+		<!-- Calculator Stylesheet & Javascript (End) -->
+	</head>
+
+   <body>
+      <!-- canvas begin -->
+      <div class="container_12" id="canvas">
+         <form name="calculator" id="calculator" method="post" action="">
+            <div class="grid_12 center" id="header" style="margin: 15px 0px 15px 0px; line-height: 24px;">
+               <p><h1>ODG v3.1.11 One Search <font color='red'>DEV - API Adapter</font> Web Service Tester</h1><span class="home"><a href="index.html">Go To Home Page</a></span></p>
+            </div>
+            <!-- API Key -->
+            <div class="grid_2"><p><label for="apikey">API Key:</label></p></div>
+            <div class="grid_4"><p><input type="password" name="apikey" id="apikey" size="40" value="e3cf1a3d593197bd7d2aa91afc1f9ffd5add2cd5" class="input" tabindex="105"></p></div>
+            <div class="grid_2"><p><label for="format">Output Format:</label></p></div>
+            <div class="grid_4">
+            	<p>
+                  <input type="radio" name="format" id="formatxml" value="XML" tabindex="106" checked=checked>XML
+                  <input type="radio" name="format" id="formatjson" value="JSON" tabindex="107">JSON
+            	</p>
+           	</div>
+            <div class="clear"></div>
+            <div class="grid_2"><p><label for="age">Client ID:</label></p></div>
+            <div class="grid_10"><p><input type="text" name="clientid" id="clientid" size="20" value="" class="input" tabindex="108"></p></div>
+            <div class="clear"></div>
+            
+            <div class="grid_2"><p><label for="categoryid">Search:</label></p></div>
+            <div class="grid_10"><p><input type="text" name="search" id="search" size="80" value="" class="input" tabindex="110" placeholder="Either either code or name, Minimum 2 characters are required."></p></div>
+            <div class="clear"></div>
+            
+            <div class="grid_2"><p><label for="hcpcscode">Search In (Database):</label></p></div>
+            <div class="grid_10">
+            	<p>
+            		<input type="checkbox" name="icd9" id="icd9" value="Y" class="input" tabindex="115" title="ICD9 Database (codes/names)" checked="checked">ICD9&nbsp;&nbsp;
+            		<input type="checkbox" name="icd10" id="icd10" value="Y" class="input" tabindex="116" title="ICD10 Database (codes/names)">ICD10&nbsp;&nbsp;
+            		<input type="checkbox" name="cpt" id="cpt" value="Y" class="input" tabindex="117" title="CPT Database (codes/names)">CPT&nbsp;&nbsp;
+            		<input type="checkbox" name="ndc" id="ndc" value="Y" class="input" tabindex="118" title="NDC Database (codes/names)">NDC&nbsp;&nbsp;
+            		<input type="checkbox" name="proct" id="proct" value="Y" class="input" tabindex="119" title="Procedure Summary (topic/chapters)">Procedure Summary
+            	</p>
+            </div>
+
+         	<div class="grid_12"><p><input type="submit" name="submit" id="submit" value="Test WebService" tabindex="300" class="button"></p></div>
+         </form>
+         <br />
+         <p style="font-weight:700; padding-left:10px;">Input Request XML:</p>
+         <div class="grid_12" style='height:200px; border:1px solid #000000;' id="request"></div>
+         <p style="font-weight:700; padding-left:10px;">Output Response XML/JSON:&nbsp;&nbsp;<span id="responseTime"></span></p>
+			<div class="grid_12" style='height:400px; border:1px solid #000000;' id="result"></div>
+         <div class="clear"></div>
+         <br />
+      </div>
+   </body>
+</html>
