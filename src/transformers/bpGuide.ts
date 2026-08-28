@@ -1,9 +1,17 @@
+import { z } from 'zod';
 import { CompanyRow } from '../db/companymaster';
 import { odgGet } from '../upstream/odgClient';
 import { OdgGuidelineRecord } from '../types/odg';
 import { LegacyBpGuideRecord } from '../types/legacy';
 import { tildeList, padFnol } from '../parsers/queryParams';
 import { LegacyError, ERRORS } from '../errors/legacyErrors';
+
+const bpGuideQuerySchema = z.object({
+  icd:      z.string().default(''),
+  bp:       z.string().optional(),
+  noi:      z.string().optional(),
+  clientid: z.string().optional(),
+});
 
 // ─── Request parsing ──────────────────────────────────────────────────────────
 
@@ -25,12 +33,17 @@ function detectIcdFamily(code: string): 'icd9' | 'icd10' {
 export function parseBpGuideParams(
   query: Record<string, string | string[] | undefined>,
 ): BpGuideContext {
-  const icdRaw = typeof query.icd === 'string' ? query.icd : '';
-  const bp = typeof query.bp === 'string' ? padFnol(query.bp) : undefined;
-  const noi = typeof query.noi === 'string' ? padFnol(query.noi) : undefined;
-  const clientid = typeof query.clientid === 'string' ? query.clientid : undefined;
+  const p = bpGuideQuerySchema.parse({
+    icd:      typeof query.icd      === 'string' ? query.icd      : undefined,
+    bp:       typeof query.bp       === 'string' ? query.bp       : undefined,
+    noi:      typeof query.noi      === 'string' ? query.noi      : undefined,
+    clientid: typeof query.clientid === 'string' ? query.clientid : undefined,
+  });
 
-  const icds = tildeList(icdRaw);
+  const bp       = p.bp  !== undefined ? padFnol(p.bp)  : undefined;
+  const noi      = p.noi !== undefined ? padFnol(p.noi) : undefined;
+  const clientid = p.clientid;
+  const icds     = tildeList(p.icd);
 
   if (icds.length === 0 && !(bp && noi)) {
     throw new LegacyError(ERRORS.INVALID_FORMAT());

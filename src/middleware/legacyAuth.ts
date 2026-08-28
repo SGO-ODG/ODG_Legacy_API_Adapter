@@ -1,10 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import { findByKey, CompanyRow } from '../db/companymaster';
 import { findSubscription, SubscriptionRow } from '../db/companywebservice';
 import { lookupServiceCode } from '../config/serviceRegistry';
 import { LegacyError, ERRORS } from '../errors/legacyErrors';
 import { sendLegacyError } from '../serializers/legacyResponse';
 import { isDebugEnabled } from '../config/env';
+
+/** Validates the X-ODG-KEY header value: must be a non-empty string after trimming. */
+const odgKeySchema = z.string().trim().min(1);
 
 export interface LegacyContext {
   company: CompanyRow;
@@ -49,14 +53,18 @@ function parseStoredDate(d: string): Date {
 export function legacyAuthMiddleware(serviceSegment: string) {
   return (req: Request, res: Response, next: NextFunction): void => {
     try {
-      // 1. Read X-ODG-KEY header
-      const key = req.headers['x-odg-key'];
-      if (!key || typeof key !== 'string' || key.trim() === '') {
+      // 1. Read and validate X-ODG-KEY header
+      const rawKey = req.headers['x-odg-key'];
+      if (!rawKey || typeof rawKey !== 'string') {
+        throw new LegacyError(ERRORS.INVALID_KEY());
+      }
+      const keyResult = odgKeySchema.safeParse(rawKey);
+      if (!keyResult.success) {
         throw new LegacyError(ERRORS.INVALID_KEY());
       }
 
-      // 2. Look up company
-      const company = findByKey(key.trim());
+      // 2. Look up company (keyResult.data is already trimmed by the schema)
+      const company = findByKey(keyResult.data);
       if (!company) {
         throw new LegacyError(ERRORS.INVALID_KEY());
       }

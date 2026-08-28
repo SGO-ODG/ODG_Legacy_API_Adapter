@@ -1,9 +1,17 @@
+import { z } from 'zod';
 import { CompanyRow } from '../db/companymaster';
 import { odgGet } from '../upstream/odgClient';
 import { OdgNdcResponse, OdgNdcInfo, OdgPbsResponse, OdgPbsInfo } from '../types/odg';
 import { LegacyNdcRecord, LegacyPbsRecord } from '../types/legacy';
 import { tildeList, normalizeNdc, isNumeric, isoToLegacyDate } from '../parsers/queryParams';
 import { LegacyError, ERRORS } from '../errors/legacyErrors';
+
+const ndcAdvisorQuerySchema = z.object({
+  ndc:      z.string().default(''),
+  country:  z.string().default(''),
+  output:   z.string().default(''),
+  clientid: z.string().optional(),
+});
 
 // ─── Request parsing ──────────────────────────────────────────────────────────
 
@@ -23,7 +31,18 @@ export interface NdcAdvisorContext {
 }
 
 export function parseNdcAdvisorParams(query: Record<string, string | string[] | undefined>): NdcAdvisorContext {
-  const ndc = typeof query.ndc === 'string' ? query.ndc : '';
+  const p = ndcAdvisorQuerySchema.parse({
+    ndc:      typeof query.ndc      === 'string' ? query.ndc      : undefined,
+    country:  typeof query.country  === 'string' ? query.country  : undefined,
+    output:   typeof query.output   === 'string' ? query.output   : undefined,
+    clientid: typeof query.clientid === 'string' ? query.clientid : undefined,
+  });
+
+  const ndc = p.ndc;
+  const country = p.country.toUpperCase();
+  const fullOutput = p.output.toUpperCase() === 'F';
+  const clientid = p.clientid;
+
   if (!ndc || ndc.trim() === '') {
     throw new LegacyError(ERRORS.INVALID_FORMAT());
   }
@@ -35,10 +54,6 @@ export function parseNdcAdvisorParams(query: Record<string, string | string[] | 
   if (codes.length === 0) {
     throw new LegacyError(ERRORS.INVALID_FORMAT());
   }
-
-  const country = (typeof query.country === 'string' ? query.country : '').toUpperCase();
-  const fullOutput = (typeof query.output === 'string' ? query.output : '').toUpperCase() === 'F';
-  const clientid = typeof query.clientid === 'string' ? query.clientid : undefined;
 
   const isKeyword = codes.some((c) => !isNumeric(c));
 

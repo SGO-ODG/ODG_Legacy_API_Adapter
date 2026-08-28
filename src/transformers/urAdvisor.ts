@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { CompanyRow } from '../db/companymaster';
 import { SubscriptionRow } from '../db/companywebservice';
 import { odgGet } from '../upstream/odgClient';
@@ -5,6 +6,17 @@ import { OdgTaoResponse, OdgTaoProcedure, OdgTaoItemGroup, OdgTaoProceduresRespo
 import { LegacyCptRecord, LegacyIcdRecord, LegacyUraRecord } from '../types/legacy';
 import { tildeList, padFnol } from '../parsers/queryParams';
 import { LegacyError, ERRORS } from '../errors/legacyErrors';
+
+const uraQuerySchema = z.object({
+  icd:      z.string().default(''),
+  cpt:      z.string().default(''),
+  proc:     z.string().default(''),
+  country:  z.string().default(''),
+  flags:    z.string().default(''),
+  bp:       z.string().optional(),
+  noi:      z.string().optional(),
+  clientid: z.string().optional(),
+});
 
 // ─── Request parsing ──────────────────────────────────────────────────────────
 
@@ -25,14 +37,25 @@ export function parseUraParams(
   query: Record<string, string | string[] | undefined>,
   subscription: SubscriptionRow,
 ): UraContext {
-  const icdRaw = typeof query.icd === 'string' ? query.icd : '';
-  const cptRaw = typeof query.cpt === 'string' ? query.cpt : '';
-  const procRaw = typeof query.proc === 'string' ? query.proc : '';
-  const country = (typeof query.country === 'string' ? query.country : '').toUpperCase();
-  const flags = typeof query.flags === 'string' ? query.flags : '';
-  const bp = typeof query.bp === 'string' ? padFnol(query.bp) : undefined;
-  const noi = typeof query.noi === 'string' ? padFnol(query.noi) : undefined;
-  const clientid = typeof query.clientid === 'string' ? query.clientid : undefined;
+  const p = uraQuerySchema.parse({
+    icd:      typeof query.icd      === 'string' ? query.icd      : undefined,
+    cpt:      typeof query.cpt      === 'string' ? query.cpt      : undefined,
+    proc:     typeof query.proc     === 'string' ? query.proc     : undefined,
+    country:  typeof query.country  === 'string' ? query.country  : undefined,
+    flags:    typeof query.flags    === 'string' ? query.flags    : undefined,
+    bp:       typeof query.bp       === 'string' ? query.bp       : undefined,
+    noi:      typeof query.noi      === 'string' ? query.noi      : undefined,
+    clientid: typeof query.clientid === 'string' ? query.clientid : undefined,
+  });
+
+  const icdRaw  = p.icd;
+  const cptRaw  = p.cpt;
+  const procRaw = p.proc;
+  const country = p.country.toUpperCase();
+  const flags   = p.flags;
+  const bp      = p.bp  !== undefined ? padFnol(p.bp)  : undefined;
+  const noi     = p.noi !== undefined ? padFnol(p.noi) : undefined;
+  const clientid = p.clientid;
 
   // Subscription outputMode overrides individual query param
   const fullOutput = subscription.outputMode === 'F';
