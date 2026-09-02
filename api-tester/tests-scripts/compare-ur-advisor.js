@@ -254,24 +254,52 @@ function sortForComparison(parsed) {
 }
 
 // ---------------------------------------------------------------------------
-// Full content comparator
-// Recursively walks both parsed objects and records every value difference.
-// Arrays: compared element-by-element; length mismatch is reported.
-// Objects: union of keys from both sides is walked.
+// Record ID extractor
+// Returns a stable string identifier for an array element so records can be
+// matched across legacy and adapter responses regardless of position.
+// Checks the common code fields used across all URA response branches:
+//   icd.code  — ICD-first top-level items
+//   cpt.code  — reverse-lookup top-level items
+//   code      — nested procedure / ICD child items
 // ---------------------------------------------------------------------------
 
-function compareContent(legacyVal, adapterVal, path, diffs) {
-  if (diffs === undefined) diffs = [];
-  if (path  === undefined) path  = '';
+function getRecordId(item) {
+  if (!item || typeof item !== 'object') return null;
+  if (item.icd  && item.icd.code  != null) return `ICD:${item.icd.code}`;
+  if (item.cpt  && item.cpt.code  != null) return `CPT:${item.cpt.code}`;
+  if (item.code != null)                   return `code:${item.code}`;
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Full content comparator
+// Recursively walks both parsed objects and records every value difference.
+//
+// Arrays: records are matched by their code identifier (icd.code / cpt.code /
+//   code field).
+//   - If one side has records and the other has none: reported as EMPTY_VS_RESULTS.
+//   - Records present in only one side: silently skipped (count may differ).
+//   - Matching records (same code on both sides): compared recursively.
+//
+// The recordCode parameter carries the outermost record identifier (e.g.
+// "ICD:S33.5" or "CPT:98940") down into nested diffs so every reported
+// discrepancy references the specific record it came from.
+// ---------------------------------------------------------------------------
+
+function compareContent(legacyVal, adapterVal, path, diffs, recordCode) {
+  if (diffs      === undefined) diffs      = [];
+  if (path       === undefined) path       = '';
+  if (recordCode === undefined) recordCode = '';
 
   const lType = getType(legacyVal);
   const aType = getType(adapterVal);
 
   if (lType !== aType) {
     diffs.push({
-      path: path || '(root)',
+      path:         path || '(root)',
       legacyValue:  `(${lType}) ${truncate(JSON.stringify(legacyVal))}`,
       adapterValue: `(${aType}) ${truncate(JSON.stringify(adapterVal))}`,
+      recordCode,
     });
     return diffs;
   }
@@ -279,20 +307,61 @@ function compareContent(legacyVal, adapterVal, path, diffs) {
   if (lType === 'object' && legacyVal !== null) {
     const allKeys = new Set([...Object.keys(legacyVal), ...Object.keys(adapterVal)]);
     for (const key of allKeys) {
-      compareContent(legacyVal[key], adapterVal[key], path ? `${path}.${key}` : key, diffs);
+      compareContent(legacyVal[key], adapterVal[key], path ? `${path}.${key}` : key, diffs, recordCode);
     }
   } else if (lType === 'array') {
-    if (legacyVal.length !== adapterVal.length) {
+    const lLen = legacyVal.length;
+    const aLen = adapterVal.length;
+
+    // One side returned records, the other returned none — always an error
+    if (lLen > 0 && aLen === 0) {
       diffs.push({
-        path: `${path || '(root)'}.length`,
-        legacyValue:  String(legacyVal.length),
-        adapterValue: String(adapterVal.length),
+        path:           path || '(root)',
+        legacyValue:    `${lLen} record(s)`,
+        adapterValue:   '0 records',
+        recordCode,
+        emptyVsResults: true,
       });
+      return diffs;
     }
-    const maxLen = Math.max(legacyVal.length, adapterVal.length);
-    for (let i = 0; i < maxLen; i++) {
-      compareContent(legacyVal[i], adapterVal[i], `${path}[${i}]`, diffs);
+    if (lLen === 0 && aLen > 0) {
+      diffs.push({
+        path:           path || '(root)',
+        legacyValue:    '0 records',
+        adapterValue:   `${aLen} record(s)`,
+        recordCode,
+        emptyVsResults: true,
+      });
+      return diffs;
     }
+
+    // Both have records — match by record ID; skip records unique to one side
+    const aById = new Map();
+    const aNoId = [];
+    adapterVal.forEach(item => {
+      const id = getRecordId(item);
+      if (id !== null) aById.set(id, item);
+      else             aNoId.push(item);
+    });
+
+    let aNoIdIdx = 0;
+    legacyVal.forEach(lItem => {
+      const id = getRecordId(lItem);
+      let aItem;
+      if (id !== null) {
+        if (!aById.has(id)) return; // only in legacy — skip
+        aItem = aById.get(id);
+        aById.delete(id);
+      } else {
+        aItem = aNoId[aNoIdIdx++];
+        if (aItem === undefined) return; // only in legacy — skip
+      }
+      // Use the record's own code as context; embed it in the path segment
+      const childCode = id || recordCode;
+      const childPath = id ? `${path}[${id}]` : `${path}[]`;
+      compareContent(lItem, aItem, childPath, diffs, childCode);
+    });
+    // Remaining adapter-only items are silently skipped
   } else {
     // Leaf: compare as strings to handle number/string coercion uniformly.
     // For 'name' fields the adapter may return a longer value than legacy;
@@ -300,7 +369,7 @@ function compareContent(legacyVal, adapterVal, path, diffs) {
     // prefixes are not flagged as failures.
     const lStr = String(legacyVal  ?? '');
     let   aStr = String(adapterVal ?? '');
-    const lastSegment = (path || '').split('.').pop().replace(/\[\d+\]$/, '');
+    const lastSegment = (path || '').split('.').pop().replace(/\[.*?\]$/, '');
     if (lastSegment === 'name' && aStr.length > lStr.length) {
       aStr = aStr.slice(0, lStr.length);
     }
@@ -308,7 +377,7 @@ function compareContent(legacyVal, adapterVal, path, diffs) {
     const lCmp = caseInsensitiveField ? lStr.toLowerCase() : lStr;
     const aCmp = caseInsensitiveField ? aStr.toLowerCase() : aStr;
     if (lCmp !== aCmp) {
-      diffs.push({ path: path || '(root)', legacyValue: lStr, adapterValue: aStr });
+      diffs.push({ path: path || '(root)', legacyValue: lStr, adapterValue: aStr, recordCode });
     }
   }
   return diffs;
@@ -495,13 +564,17 @@ async function processRow(row) {
   // 200 (data is deterministic) and non-200 (error bodies must match).
   const contentDiffs = compareContent(legacyNormalized, adapterNormalized);
   for (const diff of contentDiffs) {
+    const codeRef = diff.recordCode ? ` [${diff.recordCode}]` : '';
+    const detail  = diff.emptyVsResults
+      ? `One side returned no results at "${diff.path}"${codeRef}: legacy="${diff.legacyValue}" adapter="${diff.adapterValue}"`
+      : `Value differs at "${diff.path}"${codeRef}: legacy="${truncate(diff.legacyValue, 80)}" adapter="${truncate(diff.adapterValue, 80)}"`;
     results.push({
       ...testMeta,
-      discrepancy_type: 'CONTENT_MISMATCH',
+      discrepancy_type: diff.emptyVsResults ? 'EMPTY_VS_RESULTS' : 'CONTENT_MISMATCH',
       property_path:  diff.path,
       legacy_value:   diff.legacyValue,
       adapter_value:  diff.adapterValue,
-      detail: `Value differs at "${diff.path}": legacy="${truncate(diff.legacyValue, 80)}" adapter="${truncate(diff.adapterValue, 80)}"`,
+      detail,
     });
   }
 
