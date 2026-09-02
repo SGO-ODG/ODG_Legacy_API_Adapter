@@ -181,7 +181,8 @@ function mapTaoProcedure(proc: OdgTaoProcedure, fullOutput: boolean, country: st
   };
 
   if (fullOutput) {
-    rec.proctype = proc.procedureType ?? null;
+    const pt = proc.procedureType;
+    rec.proctype = (pt == null || pt.toUpperCase() === 'N/A') ? null : pt;
     rec.taoindex = n(proc.taoIndex);
     if (country !== 'AU') {
       rec.avglostdays    = n(proc.averageLostDays)   ?? '0.00';
@@ -234,7 +235,8 @@ function mapTaoIcdChild(icd: OdgTaoProcedure, fullOutput: boolean, country: stri
   };
 
   if (fullOutput) {
-    rec.proctype = icd.procedureType ?? null;
+    const pt = icd.procedureType;
+    rec.proctype = (pt == null || pt.toUpperCase() === 'N/A') ? null : pt;
     rec.taoindex = n(icd.taoIndex);
     if (country !== 'AU') {
       rec.avglostdays    = n(icd.averageLostDays)    ?? '0.00';
