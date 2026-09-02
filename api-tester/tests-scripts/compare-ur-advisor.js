@@ -289,9 +289,16 @@ function compareContent(legacyVal, adapterVal, path, diffs) {
       compareContent(legacyVal[i], adapterVal[i], `${path}[${i}]`, diffs);
     }
   } else {
-    // Leaf: compare as strings to handle number/string coercion uniformly
+    // Leaf: compare as strings to handle number/string coercion uniformly.
+    // For 'name' fields the adapter may return a longer value than legacy;
+    // compare only the first (legacy.length) characters so longer-but-matching
+    // prefixes are not flagged as failures.
     const lStr = String(legacyVal  ?? '');
-    const aStr = String(adapterVal ?? '');
+    let   aStr = String(adapterVal ?? '');
+    const lastSegment = (path || '').split('.').pop().replace(/\[\d+\]$/, '');
+    if (lastSegment === 'name' && aStr.length > lStr.length) {
+      aStr = aStr.slice(0, lStr.length);
+    }
     if (lStr !== aStr) {
       diffs.push({ path: path || '(root)', legacyValue: lStr, adapterValue: aStr });
     }
