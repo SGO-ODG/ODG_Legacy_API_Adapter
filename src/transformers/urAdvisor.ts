@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { CompanyRow } from '../db/companymaster';
 import { SubscriptionRow } from '../db/companywebservice';
-import { odgGet } from '../upstream/odgClient';
-import { OdgTaoResponse, OdgTaoProcedure, OdgTaoItemGroup, OdgTaoProceduresResponse } from '../types/odg';
+import { odgGet, UpstreamError } from '../upstream/odgClient';
+import { OdgTaoResponse, OdgTaoProcedure, OdgTaoItemGroup, OdgTaoProceduresResponse, OdgTaoFnolResponse } from '../types/odg';
 import { LegacyCptRecord, LegacyIcdRecord, LegacyUraRecord } from '../types/legacy';
 import { tildeList, padFnol } from '../parsers/queryParams';
 import { LegacyError, ERRORS } from '../errors/legacyErrors';
@@ -92,30 +92,29 @@ export function parseUraParams(
 
 // ─── Upstream calls ───────────────────────────────────────────────────────────
 
-export interface FnolIcdResult {
-  icds: string[];
-}
-
 /**
- * Resolves FNOL bp/noi codes to ICD codes via /tao/fnol/{bp}/{noi}.
- * TODO/confirm: confirm whether the direct FNOL response replaces the
- * ICD-derived flow or just returns candidate ICD codes.
+ * Fetches FNOL TAO data via /tao/fnol/{bp}/{noi} and maps the response
+ * into OdgTaoResponse shape so it can be fed directly into buildUraRecords.
+ * The FNOL endpoint returns the full ICD + procedure data — no secondary
+ * /tao/icds call is needed.
  */
-async function resolveFnol(
+async function fetchFnolTaoData(
   company: CompanyRow,
-  bp: string,
-  noi: string,
-): Promise<string[]> {
-  // TODO/confirm: FNOL endpoint response schema not confirmed
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data = await odgGet<any>(company, `/tao/fnol/${bp}/${noi}`);
-  // Attempt to extract ICD codes from response; shape unconfirmed
-  const candidates: string[] =
-    Array.isArray(data?.icds) ? data.icds : [];
-  if (candidates.length === 0) {
+  ctx: UraContext,
+): Promise<OdgTaoResponse> {
+  const params: Record<string, string | string[]> = {
+    Country: ctx.country || 'US',
+    ...(ctx.fullOutput ? { FullOutput: '1' } : {}),
+  };
+  if (ctx.flags) params.Flags = ctx.flags.split('');
+  if (ctx.clientid) params.ClientId = ctx.clientid;
+  const data = await odgGet<OdgTaoFnolResponse>(company, `/tao/fnol/${ctx.bp}/${ctx.noi}`, params);
+  // Flatten items[].taoDataItems[] → items[] to match OdgTaoResponse shape
+  const items = (data?.items ?? []).flatMap((item) => item.taoDataItems ?? []);
+  if (items.length === 0) {
     throw new LegacyError(ERRORS.INVALID_FNOL());
   }
-  return candidates;
+  return { items };
 }
 
 async function fetchTaoIcds(
@@ -126,7 +125,7 @@ async function fetchTaoIcds(
   const params: Record<string, string | string[] | undefined> = {
     icd: icds,
     Country: ctx.country || 'US',
-    ...(ctx.fullOutput && { FullOutput: '1' }),
+    ...(ctx.fullOutput ? { FullOutput: '1' } : {}),
   };
   if (ctx.country !== 'AU' && ctx.cpts.length > 0) {
     params.proc = ctx.cpts;
@@ -147,7 +146,7 @@ async function fetchTaoProcedures(
     proc: ctx.country === 'AU' ? ctx.procs : ctx.cpts,
     Country: ctx.country || 'US',
     resulttype: ctx.icdLookupMode === '9' ? '1' : '2',
-    ...(ctx.fullOutput && { FullOutput: '1' }),
+    ...(ctx.fullOutput ? { FullOutput: '1' } : {}),
   };
   if (ctx.flags) params.Flags = ctx.flags.split('');
   if (ctx.clientid) params.ClientId = ctx.clientid;
@@ -280,20 +279,41 @@ export async function handleUrAdvisor(
 ): Promise<UraResult> {
   let icds = ctx.icds;
 
-  // Resolve FNOL to ICDs if needed
-  if (icds.length === 0 && ctx.bp && ctx.noi) {
-    icds = await resolveFnol(company, ctx.bp, ctx.noi);
-  }
-
   let records: LegacyUraRecord[];
 
   if (ctx.icdLookupMode) {
     // icd=9|10: reverse lookup — procedure → ICDs
     const data = await fetchTaoProcedures(company, ctx);
     records = buildUraProcedureRecords(data, ctx);
-  } else {
-    const data = await fetchTaoIcds(company, ctx, icds);
+  } else if (icds.length === 0 && ctx.bp && ctx.noi) {
+    // Only BP/NOI given — FNOL response already contains full TAO data
+    const data = await fetchFnolTaoData(company, ctx);
     records = buildUraRecords(data, ctx);
+  } else {
+    try {
+      const data = await fetchTaoIcds(company, ctx, icds);
+      records = buildUraRecords(data, ctx);
+    } catch (err) {
+      // A 404 from ODG means the ICD(s) returned no data.
+      // If BP/NOI are available, fall through to FNOL; otherwise rethrow.
+      if (err instanceof UpstreamError && err.statusCode === 404 && ctx.bp && ctx.noi) {
+        records = [];
+      } else {
+        throw err;
+      }
+    }
+
+    // FNOL fallback: ICD codes returned no results (or 404) and BP/NOI are available
+    const hasTaoResults = records.some(
+      (r) =>
+        (r.cpt && r.cpt.length > 0) ||
+        (r.proc && r.proc.length > 0) ||
+        (r.icdStats && r.icdStats.length > 0),
+    );
+    if (!hasTaoResults && ctx.bp && ctx.noi) {
+      const fnolData = await fetchFnolTaoData(company, ctx);
+      records = buildUraRecords(fnolData, ctx);
+    }
   }
 
   const hasResults = records.some(
