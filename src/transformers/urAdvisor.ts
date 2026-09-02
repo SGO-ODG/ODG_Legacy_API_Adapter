@@ -183,7 +183,7 @@ function mapTaoProcedure(proc: OdgTaoProcedure, fullOutput: boolean, country: st
   if (fullOutput) {
     const pt = proc.procedureType;
     rec.proctype = (pt == null || pt.toUpperCase() === 'N/A') ? null : pt;
-    rec.taoindex = n(proc.taoIndex);
+    rec.taoindex = n(proc.taoIndex) ?? '0';
     if (country !== 'AU') {
       rec.avglostdays    = n(proc.averageLostDays)   ?? '0.00';
       rec.medianlostdays = n2(proc.medianLostDays)   ?? '0.00';
