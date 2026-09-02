@@ -35,6 +35,10 @@
  *   ADAPTER_API_BASE_URL  Base URL of the new Express adapter
  *   COMPARE_API_KEY       X-ODG-KEY sent to both environments
  *
+ * Optional .env variables:
+ *   TAO_IGNORE_CASE=Y     When set to 'Y', compare 'name' and 'proctype' fields
+ *                         case-insensitively (legacy and adapter may differ in casing)
+ *
  * Dependencies (already in root node_modules):
  *   axios, fast-xml-parser, dotenv
  */
@@ -53,9 +57,10 @@ const { XMLParser } = require(path.join(projectRoot, 'node_modules', 'fast-xml-p
 // Config
 // ---------------------------------------------------------------------------
 
-const LEGACY_BASE  = (process.env.LEGACY_API_BASE_URL  || '').replace(/\/$/, '');
-const ADAPTER_BASE = (process.env.ADAPTER_API_BASE_URL || '').replace(/\/$/, '');
-const API_KEY      = process.env.COMPARE_API_KEY || '';
+const LEGACY_BASE   = (process.env.LEGACY_API_BASE_URL  || '').replace(/\/$/, '');
+const ADAPTER_BASE  = (process.env.ADAPTER_API_BASE_URL || '').replace(/\/$/, '');
+const API_KEY       = process.env.COMPARE_API_KEY || '';
+const IGNORE_CASE   = (process.env.TAO_IGNORE_CASE || '').toUpperCase() === 'Y';
 
 const missing = [
   !LEGACY_BASE  && 'LEGACY_API_BASE_URL',
@@ -299,7 +304,10 @@ function compareContent(legacyVal, adapterVal, path, diffs) {
     if (lastSegment === 'name' && aStr.length > lStr.length) {
       aStr = aStr.slice(0, lStr.length);
     }
-    if (lStr !== aStr) {
+    const caseInsensitiveField = IGNORE_CASE && (lastSegment === 'name' || lastSegment === 'proctype');
+    const lCmp = caseInsensitiveField ? lStr.toLowerCase() : lStr;
+    const aCmp = caseInsensitiveField ? aStr.toLowerCase() : aStr;
+    if (lCmp !== aCmp) {
       diffs.push({ path: path || '(root)', legacyValue: lStr, adapterValue: aStr });
     }
   }
@@ -526,7 +534,8 @@ async function main() {
   console.log(`  API Key: ${maskedKey}`);
   console.log(`  Input:   ${inputFile}`);
   console.log(`  Output:  ${outputFile}`);
-  if (DEBUG) console.log(`  Mode:    DEBUG (raw responses printed)`);
+  if (DEBUG)       console.log(`  Mode:       DEBUG (raw responses printed)`);
+  if (IGNORE_CASE) console.log(`  Case check: DISABLED for name and proctype fields (TAO_IGNORE_CASE=Y)`);
   console.log();
 
   if (!fs.existsSync(inputFile)) {
