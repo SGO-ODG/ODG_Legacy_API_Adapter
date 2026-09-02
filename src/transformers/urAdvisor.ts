@@ -184,10 +184,10 @@ function mapTaoProcedure(proc: OdgTaoProcedure, fullOutput: boolean, country: st
     rec.proctype = proc.procedureType ?? null;
     rec.taoindex = n(proc.taoIndex);
     if (country !== 'AU') {
-      rec.avglostdays = n(proc.averageLostDays);
-      rec.medianlostdays = n2(proc.medianLostDays);
-      rec.pctneverreturn = n(proc.percentNeverReturn);
-      rec.pctzerodays = n(proc.percentZeroDays);
+      rec.avglostdays    = n(proc.averageLostDays)   ?? '0.00';
+      rec.medianlostdays = n2(proc.medianLostDays)   ?? '0.00';
+      rec.pctneverreturn = n(proc.percentNeverReturn) ?? '0.00';
+      rec.pctzerodays    = n(proc.percentZeroDays)   ?? '0.00';
     }
   }
 
@@ -237,10 +237,10 @@ function mapTaoIcdChild(icd: OdgTaoProcedure, fullOutput: boolean, country: stri
     rec.proctype = icd.procedureType ?? null;
     rec.taoindex = n(icd.taoIndex);
     if (country !== 'AU') {
-      rec.avglostdays = n(icd.averageLostDays);
-      rec.medianlostdays = n(icd.medianLostDays);
-      rec.pctneverreturn = n(icd.percentNeverReturn);
-      rec.pctzerodays = n(icd.percentZeroDays);
+      rec.avglostdays    = n(icd.averageLostDays)    ?? '0.00';
+      rec.medianlostdays = n(icd.medianLostDays)     ?? '0.00';
+      rec.pctneverreturn = n(icd.percentNeverReturn) ?? '0.00';
+      rec.pctzerodays    = n(icd.percentZeroDays)    ?? '0.00';
     }
   }
 
