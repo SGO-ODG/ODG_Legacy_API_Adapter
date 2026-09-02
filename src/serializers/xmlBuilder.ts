@@ -8,16 +8,24 @@ const builder = new XMLBuilder({
 });
 
 /**
+ * Keys that must be emitted with their exact casing in XML output.
+ * Without this, deepLowercaseKeys would produce e.g. "primaryrtwpath" which
+ * does not match the legacy PHP contract field "primaryRTWpath".
+ */
+const PRESERVE_CASE_KEYS = new Set(['primaryRTWpath']);
+
+/**
  * Recursively lowercases all object keys. Array items and primitives pass
  * through unchanged. Applied to both XML and JSON legacy output so that
  * upstream camelCase field names never leak into the legacy contract.
+ * Keys listed in PRESERVE_CASE_KEYS are emitted verbatim.
  */
 export function deepLowercaseKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(deepLowercaseKeys);
   if (value !== null && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k.toLowerCase()] = deepLowercaseKeys(v);
+      out[PRESERVE_CASE_KEYS.has(k) ? k : k.toLowerCase()] = deepLowercaseKeys(v);
     }
     return out;
   }
