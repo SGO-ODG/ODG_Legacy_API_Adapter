@@ -151,14 +151,16 @@ router.get(
         const jsonRecords = result.records.map((rec) =>
           rec.cptInfo
             ? { cpt: rec.cptInfo, icd: rec.icdStats ?? [] }
-            : { icd: rec.icd, cpt: rec.cpt ?? [] },
+            : rec.proc
+              ? { icd: rec.icd, proc: rec.proc }
+              : { icd: rec.icd, cpt: rec.cpt ?? [] },
         );
         if (result.clientid) {
-          res.status(200).json({
-            items: jsonRecords,
-            clientid: result.clientid,
-            rescount: result.records.length,
-          });
+          const obj: Record<string, unknown> = {};
+          jsonRecords.forEach((rec, i) => { obj[String(i)] = rec; });
+          obj.rescount = result.records.length;
+          obj.clientid = result.clientid;
+          res.status(200).json(obj);
         } else {
           res.status(200).json(jsonRecords);
         }
@@ -173,8 +175,12 @@ router.get(
         return;
       }
       if (err instanceof UpstreamError) {
-        const msg = ctx?.icdLookupMode ? 'ICD/Treatment code' : 'ICD code';
-        sendLegacyError(res, ERRORS.NO_RESULTS(msg));
+        const isFnol = !!(ctx?.bp || ctx?.noi);
+        if (isFnol && err.statusCode === 400) {
+          sendLegacyError(res, ERRORS.INVALID_CODES());
+          return;
+        }
+        sendLegacyError(res, ERRORS.NO_RESULTS('ICD/Treatment code'));
         return;
       }
       next(err);

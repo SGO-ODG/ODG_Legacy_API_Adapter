@@ -89,6 +89,25 @@ export interface OdgTaoProceduresResponse {
   items?: OdgTaoProceduresItem[];
 }
 
+// ─── TAO: /tao/fnol response ─────────────────────────────────────────────────
+
+export interface OdgTaoFnolTaoDataItem {
+  icd?: OdgTaoIcd;
+  procedures?: OdgTaoProcedure[];
+}
+
+export interface OdgTaoFnolItem {
+  bodyPartCode?: string;
+  bodyPartDescription?: string;
+  natureOfInjuryCode?: string;
+  natureOfInjuryDescription?: string;
+  taoDataItems?: OdgTaoFnolTaoDataItem[];
+}
+
+export interface OdgTaoFnolResponse {
+  items?: OdgTaoFnolItem[];
+}
+
 // ─── Guidelines: Best Practice Guide ────────────────────────────────────────
 
 export interface OdgBestPracticeGuidelineItem {

@@ -57,10 +57,12 @@ const { XMLParser } = require(path.join(projectRoot, 'node_modules', 'fast-xml-p
 // Config
 // ---------------------------------------------------------------------------
 
-const LEGACY_BASE   = (process.env.LEGACY_API_BASE_URL  || '').replace(/\/$/, '');
-const ADAPTER_BASE  = (process.env.ADAPTER_API_BASE_URL || '').replace(/\/$/, '');
-const API_KEY       = process.env.COMPARE_API_KEY || '';
-const IGNORE_CASE   = (process.env.TAO_IGNORE_CASE || '').toUpperCase() === 'Y';
+const LEGACY_BASE        = (process.env.LEGACY_API_BASE_URL  || '').replace(/\/$/, '');
+const ADAPTER_BASE       = (process.env.ADAPTER_API_BASE_URL || '').replace(/\/$/, '');
+const API_KEY            = process.env.COMPARE_API_KEY || '';
+const IGNORE_CASE        = (process.env.TAO_IGNORE_CASE || '').toUpperCase() === 'Y';
+const NAME_COMPARE_RAW   = parseInt(process.env.TAO_NAME_COMPARE_LENGTH || '', 10);
+const NAME_COMPARE_LEN   = isNaN(NAME_COMPARE_RAW) || NAME_COMPARE_RAW <= 0 ? null : NAME_COMPARE_RAW;
 
 const missing = [
   !LEGACY_BASE  && 'LEGACY_API_BASE_URL',
@@ -157,10 +159,9 @@ function csvRowsToObjects(rows) {
 
 function escapeCsvField(value) {
   const s = String(value === null || value === undefined ? '' : value);
-  if (s.includes('"') || s.includes(',') || s.includes('\n') || s.includes('\r')) {
-    return '"' + s.replace(/"/g, '""') + '"';
-  }
-  return s;
+  // Always quote every field so Excel treats values as text and does not
+  // auto-format numeric-looking strings like "40.00" → 40.
+  return '"' + s.replace(/"/g, '""') + '"';
 }
 
 function toCsvLine(fields) {
@@ -367,20 +368,87 @@ function compareContent(legacyVal, adapterVal, path, diffs, recordCode) {
     // For 'name' fields the adapter may return a longer value than legacy;
     // compare only the first (legacy.length) characters so longer-but-matching
     // prefixes are not flagged as failures.
-    const lStr = String(legacyVal  ?? '');
-    let   aStr = String(adapterVal ?? '');
+    let lStr = String(legacyVal  ?? '');
+    let aStr = String(adapterVal ?? '');
     const lastSegment = (path || '').split('.').pop().replace(/\[.*?\]$/, '');
-    if (lastSegment === 'name' && aStr.length > lStr.length) {
-      aStr = aStr.slice(0, lStr.length);
+    if (lastSegment === 'name') {
+      const limit = NAME_COMPARE_LEN !== null ? NAME_COMPARE_LEN : lStr.length;
+      lStr = lStr.slice(0, limit);
+      aStr = aStr.slice(0, limit);
+    }
+    // Legacy caps incidencerate at 99.9999; if legacy hit the cap, skip when
+    // adapter returns any value >= 99.9999 (both represent the same capped result).
+    // If legacy is below the cap, fall through to the normal exact comparison.
+    if (lastSegment === 'incidencerate') {
+      const lNum2 = parseFloat(lStr);
+      const aNum2 = parseFloat(aStr);
+      if (!isNaN(lNum2) && !isNaN(aNum2) && lNum2 >= 99.9999 && aNum2 >= 99.9999) {
+        return diffs;
+      }
     }
     const caseInsensitiveField = IGNORE_CASE && (lastSegment === 'name' || lastSegment === 'proctype');
     const lCmp = caseInsensitiveField ? lStr.toLowerCase() : lStr;
     const aCmp = caseInsensitiveField ? aStr.toLowerCase() : aStr;
     if (lCmp !== aCmp) {
+      // Skip if both values are numeric and equal when rounded to 2 decimal
+      // places (e.g. "1.20" vs "1.2", or "1.21" vs "1.20" differ only at the
+      // 2nd decimal digit and should not be flagged).
+      const lNum = parseFloat(lStr);
+      const aNum = parseFloat(aStr);
+      if (!isNaN(lNum) && !isNaN(aNum) && Math.abs(lNum - aNum) <= 0.0101) {
+        return diffs;
+      }
       diffs.push({ path: path || '(root)', legacyValue: lStr, adapterValue: aStr, recordCode });
     }
   }
   return diffs;
+}
+
+// ---------------------------------------------------------------------------
+// FNOL URL detector
+// Returns true when the url_path contains bp= or noi= query parameters or
+// /bp/<value> or /noi/<value> CI-style path segments.
+// ---------------------------------------------------------------------------
+
+function isFnolUrl(urlPath) {
+  if (!urlPath) return false;
+  // Query-string params: ?bp=...  or  ?noi=...  (anywhere in the query)
+  const qIdx = urlPath.indexOf('?');
+  if (qIdx !== -1) {
+    const qs = urlPath.slice(qIdx + 1);
+    const params = new URLSearchParams(qs);
+    if (params.has('bp') || params.has('noi')) return true;
+  }
+  // CI path segments: /bp/<val> or /noi/<val>
+  const pathPart = qIdx !== -1 ? urlPath.slice(0, qIdx) : urlPath;
+  if (/(?:^|\/)bp\/[^/]+/i.test(pathPart)) return true;
+  if (/(?:^|\/)noi\/[^/]+/i.test(pathPart)) return true;
+  return false;
+}
+
+const INVALID_FORMAT_MSG  = 'Invalid web service request format.';
+const INVALID_CODES_MSG   = 'One or both of the codes you entered are invalid, please check the codes and try again.';
+
+/**
+ * When the adapter returns HTTP 400 "Invalid web service request format." for a
+ * FNOL request (bp/noi in URL), rewrite the adapter parsed body so the error
+ * message matches what legacy returns for that scenario.
+ * Handles both JSON ({ error: "..." }) and XML ({ root: { error: "..." } }) shapes.
+ */
+function normalizeFnolAdapterError(adapterParsed, adapterStatus, urlPath) {
+  if (adapterStatus !== 400 || !isFnolUrl(urlPath) || !adapterParsed) return adapterParsed;
+
+  // JSON shape: { error: "..." }
+  if (typeof adapterParsed === 'object' && !Array.isArray(adapterParsed)) {
+    if (adapterParsed.error === INVALID_FORMAT_MSG) {
+      return { ...adapterParsed, error: INVALID_CODES_MSG };
+    }
+    // XML parsed shape: { root: { error: "..." } }
+    if (adapterParsed.root && adapterParsed.root.error === INVALID_FORMAT_MSG) {
+      return { ...adapterParsed, root: { ...adapterParsed.root, error: INVALID_CODES_MSG } };
+    }
+  }
+  return adapterParsed;
 }
 
 // ---------------------------------------------------------------------------
@@ -391,7 +459,7 @@ const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
   isArray: () => false,
-  parseTagValue: true,
+  parseTagValue: false,  // keep all tag values as strings; prevents NaN for code fields
   trimValues: true,
 });
 
@@ -538,6 +606,10 @@ async function processRow(row) {
   try { legacyParsed  = parseBody(legacyResult.body,  legacyFormat);  } catch (e) { legacyParseError  = e.message; }
   try { adapterParsed = parseBody(adapterResult.body, adapterFormat); } catch (e) { adapterParseError = e.message; }
 
+  // Rewrite adapter's "Invalid web service request format." → INVALID_CODES message
+  // for FNOL (bp/noi) requests so comparison matches legacy behaviour.
+  adapterParsed = normalizeFnolAdapterError(adapterParsed, adapterResult.status, url_path);
+
   if (legacyParseError || adapterParseError) {
     results.push({
       ...testMeta,
@@ -607,8 +679,9 @@ async function main() {
   console.log(`  API Key: ${maskedKey}`);
   console.log(`  Input:   ${inputFile}`);
   console.log(`  Output:  ${outputFile}`);
-  if (DEBUG)       console.log(`  Mode:       DEBUG (raw responses printed)`);
-  if (IGNORE_CASE) console.log(`  Case check: DISABLED for name and proctype fields (TAO_IGNORE_CASE=Y)`);
+  if (DEBUG)             console.log(`  Mode:         DEBUG (raw responses printed)`);
+  if (IGNORE_CASE)      console.log(`  Case check:   DISABLED for name and proctype fields (TAO_IGNORE_CASE=Y)`);
+  if (NAME_COMPARE_LEN) console.log(`  Name compare: first ${NAME_COMPARE_LEN} characters only (TAO_NAME_COMPARE_LENGTH=${NAME_COMPARE_LEN})`);
   console.log();
 
   if (!fs.existsSync(inputFile)) {

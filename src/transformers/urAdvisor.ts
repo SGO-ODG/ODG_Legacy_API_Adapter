@@ -108,11 +108,19 @@ async function fetchFnolTaoData(
   };
   if (ctx.flags) params.Flags = ctx.flags.split('');
   if (ctx.clientid) params.ClientId = ctx.clientid;
-  const data = await odgGet<OdgTaoFnolResponse>(company, `/tao/fnol/${ctx.bp}/${ctx.noi}`, params);
+  let data: OdgTaoFnolResponse;
+  try {
+    data = await odgGet<OdgTaoFnolResponse>(company, `/tao/fnol/${ctx.bp}/${ctx.noi}`, params);
+  } catch (err) {
+    if (err instanceof UpstreamError) {
+      throw new LegacyError(ERRORS.INVALID_CODES());
+    }
+    throw err;
+  }
   // Flatten items[].taoDataItems[] → items[] to match OdgTaoResponse shape
   const items = (data?.items ?? []).flatMap((item) => item.taoDataItems ?? []);
   if (items.length === 0) {
-    throw new LegacyError(ERRORS.INVALID_FNOL());
+    throw new LegacyError(ERRORS.INVALID_CODES());
   }
   return { items };
 }
@@ -164,31 +172,38 @@ function n2(val: number | undefined): string | null {
   return val != null ? val.toFixed(2) : null;
 }
 
+function capIncidence(val: number | undefined): string | null {
+  if (val == null) return null;
+  return (val > 99.9999 ? 99.9999 : val).toFixed(4);
+}
+
 function mapTaoProcedure(proc: OdgTaoProcedure, fullOutput: boolean, country: string): LegacyCptRecord {
   const rec: LegacyCptRecord = {
     code: proc.code ?? '',
     name: proc.name ?? '',
-    incidencerate: n(proc.incidenceRate),
-    cptfrequency: n(proc.procedureFrequency),
+    incidencerate: capIncidence(proc.incidenceRate),
+    ...(country === 'AU'
+      ? { procfrequency: n2(proc.procedureFrequency) }
+      : { cptfrequency: n2(proc.procedureFrequency) }),
     visit25: n(proc.visit25),
     visit50: n(proc.visit50),
     visit75: n(proc.visit75),
-    visitmean: n(proc.visitMean),
-    costmean: n(proc.costMean),
+    visitmean: n2(proc.visitMean),
+    costmean: n2(proc.costMean),
     odgcaa: n(proc.odgCAA),
     paymentflag: proc.paymentFlag ?? null,
-    costpervisit: n(proc.costPerVisit),
+    costpervisit: n2(proc.costPerVisit),
   };
 
   if (fullOutput) {
     const pt = proc.procedureType;
-    rec.proctype = (pt == null || pt.toUpperCase() === 'N/A') ? null : pt;
-    rec.taoindex = n(proc.taoIndex) ?? '0';
+    rec.proctype = (pt == null || pt.toUpperCase() === 'N/A') ? '' : pt;
+    rec.taoindex = n2(proc.taoIndex) ?? '0.00';
     if (country !== 'AU') {
-      rec.avglostdays    = n(proc.averageLostDays)   ?? '0.00';
+      rec.avglostdays    = n2(proc.averageLostDays)   ?? '0.00';
       rec.medianlostdays = n2(proc.medianLostDays)   ?? '0.00';
-      rec.pctneverreturn = n(proc.percentNeverReturn) ?? '0.00';
-      rec.pctzerodays    = n(proc.percentZeroDays)   ?? '0.00';
+      rec.pctneverreturn = n2(proc.percentNeverReturn) ?? '0.00';
+      rec.pctzerodays    = n2(proc.percentZeroDays)   ?? '0.00';
     }
   }
 
@@ -206,12 +221,16 @@ function buildUraRecords(
   const groups: OdgTaoItemGroup[] = data.items ?? [];
   const fullOutput = ctx.fullOutput;
 
-  return groups.map((group) => ({
-    icd: group.icd
-      ? { code: group.icd.code ?? '', name: group.icd.name ?? '' }
-      : undefined,
-    cpt: (group.procedures ?? []).map((p) => mapTaoProcedure(p, fullOutput, ctx.country)),
-  }));
+  const isAu = ctx.country === 'AU';
+  return groups.map((group) => {
+    const procedures = (group.procedures ?? []).map((p) => mapTaoProcedure(p, fullOutput, ctx.country));
+    return {
+      icd: group.icd
+        ? { code: group.icd.code ?? '', name: group.icd.name ?? '' }
+        : undefined,
+      ...(isAu ? { proc: procedures } : { cpt: procedures }),
+    };
+  });
 }
 
 /**
@@ -222,27 +241,27 @@ function mapTaoIcdChild(icd: OdgTaoProcedure, fullOutput: boolean, country: stri
   const rec: LegacyIcdRecord = {
     code: icd.code ?? '',
     name: icd.name ?? '',
-    incidencerate: n(icd.incidenceRate),
+    incidencerate: capIncidence(icd.incidenceRate),
     icdfrequency: n(icd.procedureFrequency),
     visit25: n(icd.visit25),
     visit50: n(icd.visit50),
     visit75: n(icd.visit75),
-    visitmean: n(icd.visitMean),
-    costmean: n(icd.costMean),
+    visitmean: n2(icd.visitMean),
+    costmean: n2(icd.costMean),
     odgcaa: n(icd.odgCAA),
     paymentflag: icd.paymentFlag ?? null,
-    costpervisit: n(icd.costPerVisit),
+    costpervisit: n2(icd.costPerVisit),
   };
 
   if (fullOutput) {
     const pt = icd.procedureType;
-    rec.proctype = (pt == null || pt.toUpperCase() === 'N/A') ? null : pt;
-    rec.taoindex = n(icd.taoIndex);
+    rec.proctype = (pt == null || pt.toUpperCase() === 'N/A') ? '' : pt;
+    rec.taoindex = n2(icd.taoIndex);
     if (country !== 'AU') {
-      rec.avglostdays    = n(icd.averageLostDays)    ?? '0.00';
-      rec.medianlostdays = n(icd.medianLostDays)     ?? '0.00';
-      rec.pctneverreturn = n(icd.percentNeverReturn) ?? '0.00';
-      rec.pctzerodays    = n(icd.percentZeroDays)    ?? '0.00';
+      rec.avglostdays    = n2(icd.averageLostDays)    ?? '0.00';
+      rec.medianlostdays = n2(icd.medianLostDays)    ?? '0.00';
+      rec.pctneverreturn = n2(icd.percentNeverReturn) ?? '0.00';
+      rec.pctzerodays    = n2(icd.percentZeroDays)    ?? '0.00';
     }
   }
 
@@ -326,10 +345,7 @@ export async function handleUrAdvisor(
   );
 
   if (!hasResults) {
-    const noResultsMsg = ctx.icdLookupMode
-      ? 'ICD/Treatment code'
-      : 'ICD code';
-    throw new LegacyError(ERRORS.NO_RESULTS(noResultsMsg));
+    throw new LegacyError(ERRORS.NO_RESULTS('ICD/Treatment code'));
   }
 
   return { records, clientid: ctx.clientid };
@@ -349,9 +365,11 @@ export function buildUraModel(result: UraResult): Record<string, unknown> {
         icd: rec.icdStats && rec.icdStats.length > 0 ? { item: rec.icdStats } : undefined,
       };
     }
+    const procedures = rec.proc ?? rec.cpt;
+    const procKey = rec.proc ? 'proc' : 'cpt';
     return {
       icd: rec.icd,
-      cpt: rec.cpt && rec.cpt.length > 0 ? { item: rec.cpt } : undefined,
+      [procKey]: procedures && procedures.length > 0 ? { item: procedures } : undefined,
     };
   });
 

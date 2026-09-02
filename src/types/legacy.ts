@@ -37,7 +37,8 @@ export interface LegacyCptRecord {
   code: string;
   name: string;
   incidencerate: string | null;
-  cptfrequency: string | null;
+  cptfrequency?: string | null;
+  procfrequency?: string | null;
   visit25: string | null;
   visit50: string | null;
   visit75: string | null;
