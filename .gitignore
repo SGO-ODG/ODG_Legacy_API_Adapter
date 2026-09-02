@@ -1,7 +1,13 @@
-node_modules/
-dist/
+# Skip Files
 .env
 *.sqlite
 data/*.sqlite
-coverage/
 *.js.map
+*.xlsx
+
+# Skip Folders
+coverage/
+node_modules/
+dist/
+api-tester/tests-scripts/input/
+api-tester/tests-scripts/output/
