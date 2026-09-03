@@ -21,6 +21,13 @@
  *   ADAPTER_API_BASE_URL  Base URL of the new Express adapter
  *   COMPARE_API_KEY       X-ODG-KEY sent to both environments (same key must exist in both)
  *
+ * Optional .env variables:
+ *   SEARCH_IGNORE_CASE=Y          When set to 'Y', compare 'name' fields case-insensitively
+ *                                 (legacy and adapter may differ in casing)
+ *   SEARCH_NAME_COMPARE_LENGTH=N  Only compare the first N characters of each 'name' value
+ *                                 so adapter names that extend beyond legacy-truncated length
+ *                                 are not flagged. Leave blank to compare the full name.
+ *
  * Dependencies (already in root node_modules):
  *   axios, fast-xml-parser, dotenv
  */
@@ -39,9 +46,12 @@ const { XMLParser }   = require(path.join(projectRoot, 'node_modules', 'fast-xml
 // Config
 // ---------------------------------------------------------------------------
 
-const LEGACY_BASE  = (process.env.LEGACY_API_BASE_URL  || '').replace(/\/$/, '');
-const ADAPTER_BASE = (process.env.ADAPTER_API_BASE_URL || '').replace(/\/$/, '');
-const API_KEY      = process.env.COMPARE_API_KEY || '';
+const LEGACY_BASE        = (process.env.LEGACY_API_BASE_URL  || '').replace(/\/$/, '');
+const ADAPTER_BASE       = (process.env.ADAPTER_API_BASE_URL || '').replace(/\/$/, '');
+const API_KEY            = process.env.COMPARE_API_KEY || '';
+const IGNORE_CASE        = (process.env.SEARCH_IGNORE_CASE || '').toUpperCase() === 'Y';
+const NAME_COMPARE_RAW   = parseInt(process.env.SEARCH_NAME_COMPARE_LENGTH || '', 10);
+const NAME_COMPARE_LEN   = isNaN(NAME_COMPARE_RAW) || NAME_COMPARE_RAW <= 0 ? null : NAME_COMPARE_RAW;
 
 const missing = [
   !LEGACY_BASE  && 'LEGACY_API_BASE_URL',
@@ -264,6 +274,60 @@ function getType(value) {
 }
 
 // ---------------------------------------------------------------------------
+// Items-by-type extractor
+// Walks the normalized response tree and returns a Map<typePath, item[]>.
+// Mirrors the grouping logic in extractSchema so type paths are identical.
+// ---------------------------------------------------------------------------
+
+// Returns the original-case key value for display in property paths.
+function getItemDisplayKey(item) {
+  if (!item || typeof item !== 'object') return String(item ?? '');
+  for (const field of ['code', 'id', 'ndcCode', 'icdcode', 'cptcode']) {
+    if (item[field] != null) return String(item[field]);
+  }
+  return JSON.stringify(item);
+}
+
+// Returns a lowercase key for map-based record matching so lookup is case-insensitive.
+function getItemSortKey(item) {
+  return getItemDisplayKey(item).toLowerCase();
+}
+
+// Builds a key → item map for key-based record matching.
+// If two items share the same key (should not happen for code-keyed results), the last one wins.
+function buildItemKeyMap(items) {
+  const map = new Map();
+  for (const item of items) map.set(getItemSortKey(item), item);
+  return map;
+}
+
+function extractItemsByType(value, prefix, results) {
+  if (results === undefined) results = new Map();
+  if (prefix === undefined) prefix = '';
+  if (!value || typeof value !== 'object') return results;
+
+  if (Array.isArray(value)) {
+    const withType = value.filter(i => i && typeof i === 'object' && i.type != null);
+    if (withType.length === value.length && value.length > 0) {
+      const byType = new Map();
+      for (const item of value) {
+        const t = String(item.type);
+        if (!byType.has(t)) byType.set(t, []);
+        byType.get(t).push(item);
+      }
+      for (const [t, items] of byType)
+        results.set(`${prefix}[type=${t}]`, items);
+    } else {
+      value.forEach((v, i) => extractItemsByType(v, `${prefix}[${i}]`, results));
+    }
+  } else {
+    for (const [k, v] of Object.entries(value))
+      extractItemsByType(v, prefix ? `${prefix}.${k}` : k, results);
+  }
+  return results;
+}
+
+// ---------------------------------------------------------------------------
 // Schema comparator
 // Returns array of discrepancy objects
 // ---------------------------------------------------------------------------
@@ -345,7 +409,19 @@ function compareContent(legacyVal, adapterVal, path, diffs) {
     // Leaf value - compare as strings (covers string, number, boolean, null)
     const lStr = String(legacyVal  ?? '');
     const aStr = String(adapterVal ?? '');
-    if (lStr !== aStr) {
+    const lastSegment = (path || '').split('.').pop().replace(/\[.*?\]$/, '');
+    let mismatch;
+    if (lastSegment === 'name') {
+      // For name fields: compare only the first NAME_COMPARE_LEN chars (if set),
+      // and optionally case-insensitively. Always report the full original values.
+      const limit = NAME_COMPARE_LEN !== null ? NAME_COMPARE_LEN : lStr.length;
+      const lCmp = IGNORE_CASE ? lStr.slice(0, limit).toLowerCase() : lStr.slice(0, limit);
+      const aCmp = IGNORE_CASE ? aStr.slice(0, limit).toLowerCase() : aStr.slice(0, limit);
+      mismatch = lCmp !== aCmp;
+    } else {
+      mismatch = lStr !== aStr;
+    }
+    if (mismatch) {
       diffs.push({ path, legacyValue: lStr, adapterValue: aStr });
     }
   }
@@ -378,6 +454,53 @@ function hasResults(parsed) {
 }
 
 // ---------------------------------------------------------------------------
+// JSON group flattener
+// Both the legacy PHP API and the adapter return JSON responses where results
+// are grouped under numeric string keys (e.g. {"500":[...ICD9...],"501":[...ICD10...]}).
+// This is a PHP json_encode artefact: non-zero-indexed or associative-numeric PHP arrays
+// serialize as objects rather than JSON arrays.
+// This function converts that structure into the same flat array of typed items that the
+// XML path produces after fast-xml-parser, e.g.:
+//   [{ type:"ICD9", code:"250.0", name:"..." }, { type:"ICD10", code:"E11", name:"..." }]
+// Items inside each group are expected to carry their own `type` field (just as XML items do).
+// The numeric key is discarded — it is only a grouping container, not meaningful data.
+// Applied to both sides before normalizeResultArrays so all downstream comparison logic
+// (type-grouping, key-join, COUNT_INFO, VALUE_MISMATCH) behaves identically for JSON and XML.
+// ---------------------------------------------------------------------------
+
+function flattenJsonGroups(parsed) {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return parsed;
+  const keys = Object.keys(parsed);
+  if (keys.length === 0) return parsed;
+
+  const numericKeys = keys.filter(k => /^\d+$/.test(k));
+  if (numericKeys.length === 0) return parsed; // no numeric result groups — nothing to do
+
+  // Flatten all numeric-keyed groups into a single items array (sorted by key for stability).
+  // Each group value is an array of result items; unwrap it into the combined flat array.
+  const flatItems = numericKeys
+    .map(k => parseInt(k, 10))
+    .sort((a, b) => a - b)
+    .flatMap(k => {
+      const group = parsed[String(k)];
+      return Array.isArray(group) ? group : (group != null ? [group] : []);
+    });
+
+  const nonNumericKeys = keys.filter(k => !/^\d+$/.test(k));
+  if (nonNumericKeys.length === 0) {
+    // Pure numeric-keyed object (no metadata) — return the flat items array directly
+    return flatItems;
+  }
+  // Mixed keys: response also contains metadata fields (e.g. clientid, rescount).
+  // Keep those as-is and add the flattened items under a 'results' key so downstream
+  // schema/value comparison sees both metadata and result items on both sides.
+  const result = {};
+  for (const k of nonNumericKeys) result[k] = parsed[k];
+  result.results = flatItems;
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // XML parser config - mirrors fast-xml-parser settings used in the adapter
 // ---------------------------------------------------------------------------
 
@@ -385,7 +508,7 @@ const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
   isArray: () => false,          // let schema extractor handle arrays naturally
-  parseTagValue: true,           // parse numeric values as numbers
+  parseTagValue: false,          // keep tag values as strings so "250" and "250.0" remain distinct
   trimValues: true
 });
 
@@ -560,11 +683,17 @@ async function processRow(row) {
     return results;
   }
 
+  // For JSON responses, flatten numeric-keyed group objects (PHP json_encode artefact) into
+  // a single flat array of typed items before normalization, so the same type-grouping and
+  // key-join comparison used for XML applies equally to JSON format responses.
+  const legacyPrepped  = legacyFormat  === 'json' ? flattenJsonGroups(legacyParsed)  : legacyParsed;
+  const adapterPrepped = adapterFormat === 'json' ? flattenJsonGroups(adapterParsed) : adapterParsed;
+
   // Normalize single-item XML objects to arrays FIRST so hasResults() and schema
   // extraction both see a consistent array regardless of result count.
   // (fast-xml-parser returns a plain object for a single <item> but an array for multiple)
-  const legacyNormalized  = normalizeResultArrays(legacyParsed);
-  const adapterNormalized = normalizeResultArrays(adapterParsed);
+  const legacyNormalized  = normalizeResultArrays(legacyPrepped);
+  const adapterNormalized = normalizeResultArrays(adapterPrepped);
 
   // ----- Non-200 path: compare status, structure, AND content -----
   // For error responses the body is small and both sides must be identical.
@@ -626,21 +755,71 @@ async function processRow(row) {
   const schemaDiscrepancies = compareSchemas(legacySchema, adapterSchema, testMeta);
   results.push(...schemaDiscrepancies);
 
-  // Per-type count differences are informational - not a failure.
-  // e.g. legacy returned 1 ICD9 result, adapter returned 4 (elasticsearch may surface more).
-  const allTypePaths = new Set([...Object.keys(legacyCounts), ...Object.keys(adapterCounts)]);
-  for (const typePath of allTypePaths) {
-    const lCount = legacyCounts[typePath] ?? 0;
-    const aCount = adapterCounts[typePath] ?? 0;
-    if (lCount !== aCount) {
+  // Type-level presence check + value comparison on common records.
+  // If legacy has ≥1 result for a type and adapter has 0 → TYPE_MISSING_IN_ADAPTER (failure).
+  // If both have results → compare first min(l,a) records for value equality → VALUE_MISMATCH (failure).
+  // If counts differ but both have results → COUNT_INFO (informational, not a failure).
+  const legacyItemsByType  = extractItemsByType(legacyNormalized);
+  const adapterItemsByType = extractItemsByType(adapterNormalized);
+
+  for (const [typePath, legacyItems] of legacyItemsByType) {
+    const adapterItems = adapterItemsByType.get(typePath) || [];
+
+    if (adapterItems.length === 0) {
       results.push({
         ...testMeta,
-        discrepancy_type: 'COUNT_INFO',
+        discrepancy_type: 'TYPE_MISSING_IN_ADAPTER',
         property_path: typePath,
-        legacy_type: String(lCount),
-        adapter_type: String(aCount),
-        detail: `${typePath}: legacy returned ${lCount} result(s), adapter returned ${aCount} - count difference is expected and does not fail the test`
+        legacy_type: String(legacyItems.length),
+        adapter_type: '0',
+        detail: `Type "${typePath}" has ${legacyItems.length} result(s) in legacy but 0 in adapter`
       });
+    } else {
+      // Key-join: only compare records whose key (code/id/etc.) exists in BOTH sides.
+      // Records unique to one side are simply different results - not a failure.
+      const legacyByKey  = buildItemKeyMap(legacyItems);
+      const adapterByKey = buildItemKeyMap(adapterItems);
+      for (const [key, legacyItem] of legacyByKey) {
+        const adapterItem = adapterByKey.get(key);
+        if (!adapterItem) continue; // only in legacy - different result set, skip
+        const displayKey = getItemDisplayKey(legacyItem); // original case for path label
+        const diffs = compareContent(legacyItem, adapterItem);
+        for (const diff of diffs) {
+          const fieldPath = diff.path ? `${typePath}[code=${displayKey}].${diff.path}` : `${typePath}[code=${displayKey}]`;
+
+          // KNOWN EXCEPTION: For ICD9/ICD10 results, the `name` field may differ when the
+          // search was performed by description (e.g. "diabetes") rather than by a specific code.
+          // Legacy returns the matched description text as `name`; the adapter returns the
+          // code's canonical name from the ODG API.  This is a permanent legacy quirk — not a
+          // bug we intend to fix — because legacy is EOL.  Skip these name mismatches to avoid
+          // noise in the comparison output.
+          if (/\[type=ICD\d+\]/.test(typePath) && diff.path === 'name') continue;
+
+          results.push({
+            ...testMeta,
+            discrepancy_type: 'VALUE_MISMATCH',
+            property_path: fieldPath,
+            legacy_type: diff.legacyValue,
+            adapter_type: diff.adapterValue,
+            detail: `Value mismatch at "${fieldPath}": legacy="${diff.legacyValue}" adapter="${diff.adapterValue}"`
+          });
+        }
+      }
+      // COUNT_INFO applies to both XML and JSON format responses.
+      // Count differences are expected and not treated as failures because:
+      //   1. The adapter caps results at ~500 per type; legacy may return more.
+      //   2. Search engines (legacy vs ODG) can return different result sets for the same query.
+      // Only records whose key exists on BOTH sides are compared for value equality.
+      if (legacyItems.length !== adapterItems.length) {
+        results.push({
+          ...testMeta,
+          discrepancy_type: 'COUNT_INFO',
+          property_path: typePath,
+          legacy_type: String(legacyItems.length),
+          adapter_type: String(adapterItems.length),
+          detail: `${typePath}: legacy returned ${legacyItems.length} result(s), adapter returned ${adapterItems.length} - count difference is expected (adapter caps at ~500 per type); compared matching-key records only, this does not fail the test`
+        });
+      }
     }
   }
 
@@ -674,7 +853,9 @@ async function main() {
   console.log(`  API Key: ${maskedKey}`);
   console.log(`  Input:   ${inputFile}`);
   console.log(`  Output:  ${outputFile}`);
-  if (DEBUG) console.log(`  Mode:    DEBUG (raw responses printed)`);
+  if (DEBUG)             console.log(`  Mode:         DEBUG (raw responses printed)`);
+  if (IGNORE_CASE)      console.log(`  Case check:   DISABLED for name field (SEARCH_IGNORE_CASE=Y)`);
+  if (NAME_COMPARE_LEN) console.log(`  Name compare: first ${NAME_COMPARE_LEN} characters only (SEARCH_NAME_COMPARE_LENGTH=${NAME_COMPARE_LEN})`);
   console.log();
 
   if (!fs.existsSync(inputFile)) {
