@@ -149,8 +149,8 @@ export interface LegacyCalculatorResponse {
   projectedcosts?: Record<string, unknown>;
   adjustedsummaryguidelines?: Record<string, unknown>;
   comprate?: string;
-  icdcodes?: { icdcode: LegacyCalcIcdCodeItem[] };
-  fnolcodes?: Record<string, unknown>;
+  icdcodes?: { icdcode: LegacyCalcIcdCodeItem[] } | LegacyCalcIcdCodeItem[];
+  fnolcodes?: Record<string, unknown> | unknown[];
   procsummary?: Record<string, unknown>;
   cfactors?: Record<string, unknown>;
   alertdesc?: Record<string, unknown>;

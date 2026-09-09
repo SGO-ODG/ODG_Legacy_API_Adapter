@@ -1,4 +1,4 @@
-import { XMLParser } from 'fast-xml-parser';
+import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { LegacyError, ERRORS } from '../errors/legacyErrors';
 
 const parser = new XMLParser({
@@ -22,6 +22,11 @@ export function parseXmlBody(raw: Buffer | string): Record<string, unknown> {
 
   if (!text || text.trim().length === 0) {
     throw new LegacyError(ERRORS.INVALID_FORMAT());
+  }
+
+  const valid = XMLValidator.validate(text);
+  if (valid !== true) {
+    throw new LegacyError(ERRORS.INVALID_XML());
   }
 
   try {

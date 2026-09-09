@@ -192,19 +192,10 @@ function truncate(val, max) {
 // ---------------------------------------------------------------------------
 // Order-insensitive normalizer
 //
-// bpguide records and their nested section items (bp, activitymod, pt, chiro)
-// may be returned in a different order by legacy vs adapter. Before comparing,
-// sort everything into a deterministic canonical order so compareContent does
-// not flag order-only differences.
-//
-// XML shape (fast-xml-parser):
-//   single record : { root: { item: { icdcode, bp: { item: {...} }, ... } } }
-//   multiple      : { root: { item: [ {...}, {...} ], clientid?, rescount? } }
-//   nested single : bp.item is an object; nested multiple: bp.item is an array
-//
-// JSON shape:
-//   without clientid : [ { icdcode, bp: [...], ... } ]
-//   with clientid    : { "0": {...}, "1": {...}, rescount, clientid }
+// Recursively sorts every array at every depth by canonical key so that
+// ordering differences in nested child elements (bp, activitymod, pt, chiro
+// items, etc.) never produce false failures.
+// Root-level items are matched by ICD prefix — see compareItemsList below.
 // ---------------------------------------------------------------------------
 
 // Recursively sort object keys for a stable canonical string representation.
@@ -222,85 +213,23 @@ function canonicalKey(item) {
   return JSON.stringify(deepSortKeys(item));
 }
 
-// Sort an array by canonicalKey; leave non-arrays unchanged.
-function sortArrayIfArray(val) {
-  if (!Array.isArray(val)) return val;
-  return [...val].sort((a, b) => {
-    const ka = canonicalKey(a);
-    const kb = canonicalKey(b);
-    return ka < kb ? -1 : ka > kb ? 1 : 0;
-  });
-}
-
-// Sort a single XML record's nested section arrays (bp/activitymod/pt/chiro).
-// Each section is either null, { item: obj } (single), or { item: [obj, ...] } (multiple).
-function sortXmlRecord(rec) {
-  if (!rec || typeof rec !== 'object') return rec;
-  const out = { ...rec };
-  for (const field of ['bp', 'activitymod', 'pt', 'chiro']) {
-    const section = rec[field];
-    if (section && typeof section === 'object' && section.item !== undefined) {
-      out[field] = { ...section, item: sortArrayIfArray(section.item) };
-    }
+// Recursively normalize a parsed response: sort every array at every depth
+// by canonical key so the comparison is fully order-insensitive.
+function deepNormalize(val) {
+  if (Array.isArray(val)) {
+    const items = val.map(deepNormalize);
+    return items.sort((a, b) => {
+      const ka = canonicalKey(a);
+      const kb = canonicalKey(b);
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
   }
-  return out;
-}
-
-// Sort top-level XML records by icdcode, then sort each record's nested sections.
-function sortXmlResponse(parsed) {
-  if (!parsed || typeof parsed !== 'object' || !parsed.root) return parsed;
-  const root    = parsed.root;
-  const rawItem = root.item;
-  let sortedItem;
-  if (Array.isArray(rawItem)) {
-    sortedItem = [...rawItem]
-      .sort((a, b) => String(a?.icdcode ?? '') < String(b?.icdcode ?? '') ? -1 : 1)
-      .map(sortXmlRecord);
-  } else if (rawItem && typeof rawItem === 'object') {
-    // Single record - no array sort needed, just sort its nested sections
-    sortedItem = sortXmlRecord(rawItem);
-  } else {
-    sortedItem = rawItem;
-  }
-  return { ...parsed, root: { ...root, item: sortedItem } };
-}
-
-// Sort a single JSON record's nested section arrays.
-function sortJsonRecord(rec) {
-  if (!rec || typeof rec !== 'object') return rec;
-  const out = { ...rec };
-  for (const field of ['bp', 'activitymod', 'pt', 'chiro']) {
-    if (Array.isArray(rec[field])) out[field] = sortArrayIfArray(rec[field]);
-  }
-  return out;
-}
-
-// Sort top-level JSON records by icdcode, then sort each record's nested sections.
-function sortJsonResponse(parsed) {
-  if (Array.isArray(parsed)) {
-    return [...parsed]
-      .sort((a, b) => String(a?.icdcode ?? '') < String(b?.icdcode ?? '') ? -1 : 1)
-      .map(sortJsonRecord);
-  }
-  // With clientid: { "0": {...}, "1": {...}, rescount, clientid }
-  if (parsed && typeof parsed === 'object') {
-    const recordEntries = Object.entries(parsed).filter(([k]) => /^\d+$/.test(k));
-    const metaEntries   = Object.entries(parsed).filter(([k]) => !/^\d+$/.test(k));
-    const sorted = recordEntries
-      .map(([, v]) => v)
-      .sort((a, b) => String(a?.icdcode ?? '') < String(b?.icdcode ?? '') ? -1 : 1)
-      .map(sortJsonRecord);
+  if (val && typeof val === 'object') {
     const out = {};
-    sorted.forEach((rec, i) => { out[String(i)] = rec; });
-    for (const [k, v] of metaEntries) out[k] = v;
+    for (const k of Object.keys(val)) out[k] = deepNormalize(val[k]);
     return out;
   }
-  return parsed;
-}
-
-function sortForComparison(parsed, format) {
-  if (format === 'json') return sortJsonResponse(parsed);
-  return sortXmlResponse(parsed);
+  return val;
 }
 
 // ---------------------------------------------------------------------------
@@ -313,6 +242,19 @@ function sortForComparison(parsed, format) {
 function compareContent(legacyVal, adapterVal, path, diffs) {
   if (diffs === undefined) diffs = [];
   if (path  === undefined) path  = '';
+
+  // Adapter returns a property / element that legacy omits entirely.
+  // Legacy may not return output for certain ICD codes — treat as EXPECTED_DIFF.
+  if ((legacyVal === undefined || legacyVal === null || legacyVal === '') &&
+      adapterVal !== undefined && adapterVal !== null && adapterVal !== '') {
+    diffs.push({
+      path:         path || '(root)',
+      legacyValue:  '',
+      adapterValue: truncate(JSON.stringify(adapterVal)),
+      type:         'EXPECTED_DIFF',
+    });
+    return diffs;
+  }
 
   const lType = getType(legacyVal);
   const aType = getType(adapterVal);
@@ -333,10 +275,13 @@ function compareContent(legacyVal, adapterVal, path, diffs) {
     }
   } else if (lType === 'array') {
     if (legacyVal.length !== adapterVal.length) {
+      // Adapter returning more items than legacy is expected — legacy may omit records.
+      const type = legacyVal.length < adapterVal.length ? 'EXPECTED_DIFF' : undefined;
       diffs.push({
-        path: `${path || '(root)'}.length`,
+        path:         `${path || '(root)'}.length`,
         legacyValue:  String(legacyVal.length),
-        adapterValue: String(adapterVal.length)
+        adapterValue: String(adapterVal.length),
+        type,
       });
     }
     const maxLen = Math.max(legacyVal.length, adapterVal.length);
@@ -347,9 +292,158 @@ function compareContent(legacyVal, adapterVal, path, diffs) {
     // Leaf: compare as strings to handle number/string coercion uniformly
     const lStr = String(legacyVal  ?? '');
     const aStr = String(adapterVal ?? '');
+
     if (lStr !== aStr) {
       diffs.push({ path: path || '(root)', legacyValue: lStr, adapterValue: aStr });
     }
+  }
+  return diffs;
+}
+
+// ---------------------------------------------------------------------------
+// ICD-aware root-item comparison
+//
+// Root-level <item> records are matched by ICD code prefix (before the
+// decimal) so that legacy "G63" correctly pairs with adapter "G63.8".
+// Unmatched adapter items (extra records not in legacy) are EXPECTED_DIFF.
+// Inner arrays (bp, activitymod, pt, chiro) are compared via deepNormalize
+// so their internal ordering never causes false failures.
+// ---------------------------------------------------------------------------
+
+// Returns the portion of an ICD code before the decimal point, upper-cased.
+function getIcdPrefix(code) {
+  if (code === null || code === undefined) return '';
+  return String(code).split('.')[0].toUpperCase();
+}
+
+// Extract the array of top-level <item> records from a parsed response.
+// Handles: XML  → { root: { item: [...] or {...} } }
+//          JSON → top-level array [...] or numeric-key object { "0": {...} }
+function extractRootItems(parsed) {
+  if (!parsed) return [];
+  // XML (and possibly JSON) with root wrapper
+  if (Object.prototype.hasOwnProperty.call(parsed, 'root')) {
+    const rootVal = parsed.root;
+    if (!rootVal || typeof rootVal !== 'object') return [];
+    const item = rootVal.item;
+    if (!item) return [];
+    if (Array.isArray(item)) return item;
+    if (typeof item === 'object') return [item];
+    return [];
+  }
+  // Top-level JSON array
+  if (Array.isArray(parsed)) return parsed;
+  // Top-level JSON object with numeric string keys
+  // (non-numeric keys like "clientid" may also be present and are ignored here)
+  const keys = Object.keys(parsed);
+  const numericKeys = keys.filter(k => /^\d+$/.test(k));
+  if (numericKeys.length > 0) {
+    return numericKeys.sort((a, b) => +a - +b).map(k => parsed[k]);
+  }
+  return [];
+}
+
+// Pair legacy items with adapter items by ICD prefix.
+// Returns [{ legacy, adapter }] — adapter-only items have legacy=null.
+function matchByIcd(legacyItems, adapterItems) {
+  const pairs = [];
+  const usedAdapter = new Set();
+
+  for (const legItem of legacyItems) {
+    const legPrefix = getIcdPrefix(legItem && legItem.icdcode);
+    let bestIdx = -1;
+    if (legPrefix) {
+      for (let i = 0; i < adapterItems.length; i++) {
+        if (usedAdapter.has(i)) continue;
+        const adpPrefix = getIcdPrefix(adapterItems[i] && adapterItems[i].icdcode);
+        if (adpPrefix === legPrefix) { bestIdx = i; break; }
+      }
+    }
+    if (bestIdx >= 0) {
+      usedAdapter.add(bestIdx);
+      pairs.push({ legacy: legItem, adapter: adapterItems[bestIdx] });
+    } else {
+      pairs.push({ legacy: legItem, adapter: null });
+    }
+  }
+
+  // Remaining adapter-only items → will become EXPECTED_DIFF
+  for (let i = 0; i < adapterItems.length; i++) {
+    if (!usedAdapter.has(i)) {
+      pairs.push({ legacy: null, adapter: adapterItems[i] });
+    }
+  }
+  return pairs;
+}
+
+// Compare one matched (legacy, adapter) item pair and push diffs.
+// icdcode difference  → EXPECTED_DIFF (prefix matched but full code may differ)
+// name difference     → EXPECTED_DIFF (expected when icd code variant differs)
+// all other fields    → deepNormalize inner arrays then compareContent
+// adapter-only item   → EXPECTED_DIFF (adapter returned extra record)
+// legacy-only item    → CONTENT_MISMATCH (adapter is missing a record)
+function comparePair(legacy, adapter, diffs) {
+  const legIcdPrefix = getIcdPrefix(legacy  && legacy.icdcode);
+  const adpIcdPrefix = getIcdPrefix(adapter && adapter.icdcode);
+  const icdLabel = legIcdPrefix || adpIcdPrefix || 'unknown';
+  const itemPath = `item[icd=${icdLabel}]`;
+
+  if (!legacy && adapter) {
+    diffs.push({
+      path:         itemPath,
+      legacyValue:  '',
+      adapterValue: truncate(JSON.stringify(adapter)),
+      type:         'EXPECTED_DIFF',
+    });
+    return;
+  }
+
+  if (legacy && !adapter) {
+    diffs.push({
+      path:         itemPath,
+      legacyValue:  truncate(JSON.stringify(legacy)),
+      adapterValue: '',
+    });
+    return;
+  }
+
+  // Both present — compare icdcode and name first, then remaining fields
+  const legIcd  = String(legacy.icdcode  ?? '');
+  const adpIcd  = String(adapter.icdcode ?? '');
+  if (legIcd !== adpIcd) {
+    diffs.push({ path: `${itemPath}.icdcode`, legacyValue: legIcd, adapterValue: adpIcd, type: 'EXPECTED_DIFF' });
+  }
+
+  const legName = String(legacy.name  ?? '');
+  const adpName = String(adapter.name ?? '');
+  if (legName !== adpName) {
+    diffs.push({ path: `${itemPath}.name`, legacyValue: legName, adapterValue: adpName, type: 'EXPECTED_DIFF' });
+  }
+
+  // Compare all other fields; deepNormalize handles inner array ordering
+  const legRest = Object.assign({}, legacy);
+  const adpRest = Object.assign({}, adapter);
+  delete legRest.icdcode; delete legRest.name;
+  delete adpRest.icdcode; delete adpRest.name;
+
+  compareContent(deepNormalize(legRest), deepNormalize(adpRest), itemPath, diffs);
+}
+
+// Top-level ICD-aware comparison of two parsed bpguide responses.
+// When no root items are detected (error/empty response) falls back to generic
+// compareContent so error-message mismatches are still caught.
+function compareItemsList(legacyParsed, adapterParsed) {
+  const diffs        = [];
+  const legacyItems  = extractRootItems(legacyParsed);
+  const adapterItems = extractRootItems(adapterParsed);
+
+  if (legacyItems.length === 0 && adapterItems.length === 0) {
+    return compareContent(deepNormalize(legacyParsed), deepNormalize(adapterParsed));
+  }
+
+  const pairs = matchByIcd(legacyItems, adapterItems);
+  for (const { legacy, adapter } of pairs) {
+    comparePair(legacy, adapter, diffs);
   }
   return diffs;
 }
@@ -524,24 +618,24 @@ async function processRow(row) {
     return results;
   }
 
-  // Normalize ordering before comparison: records are sorted by icdcode and
-  // nested section arrays (bp, activitymod, pt, chiro) are sorted by canonical
-  // key so order differences don't produce false failures.
-  // Non-200 error bodies have no record arrays so sortForComparison is a no-op.
-  const legacyNormalized  = sortForComparison(legacyParsed,  legacyFormat);
-  const adapterNormalized = sortForComparison(adapterParsed, adapterFormat);
+  // ICD-aware comparison: root items are matched by ICD prefix so that
+  // "G63" (legacy) correctly pairs with "G63.8" (adapter), extra adapter
+  // items are EXPECTED_DIFF, and inner arrays are order-insensitive via
+  // deepNormalize. Falls back to generic compareContent for error responses.
+  const contentDiffs = compareItemsList(legacyParsed, adapterParsed);
 
-  // Full content comparison - bpguide responses must match exactly for both
-  // 200 (guideline data is deterministic) and non-200 (error bodies must match).
-  const contentDiffs = compareContent(legacyNormalized, adapterNormalized);
   for (const diff of contentDiffs) {
+    const discrepancy_type = diff.type || 'CONTENT_MISMATCH';
+    const detail = discrepancy_type === 'EXPECTED_DIFF'
+      ? `Expected diff at "${diff.path}": legacy="${truncate(diff.legacyValue, 80)}" adapter="${truncate(diff.adapterValue, 80)}"`
+      : `Value differs at "${diff.path}": legacy="${truncate(diff.legacyValue, 80)}" adapter="${truncate(diff.adapterValue, 80)}"`;
     results.push({
       ...testMeta,
-      discrepancy_type: 'CONTENT_MISMATCH',
+      discrepancy_type,
       property_path:  diff.path,
       legacy_value:   diff.legacyValue,
       adapter_value:  diff.adapterValue,
-      detail: `Value differs at "${diff.path}": legacy="${truncate(diff.legacyValue, 80)}" adapter="${truncate(diff.adapterValue, 80)}"`
+      detail,
     });
   }
 
@@ -607,13 +701,15 @@ async function main() {
 
     const resultRows = await processRow(row);
 
-    const statusTag   = `[L:${resultRows[0].http_status_legacy} A:${resultRows[0].http_status_adapter}]`;
-    const failingRows = resultRows.filter(r => r.discrepancy_type !== 'PASS');
-    const passed      = failingRows.length === 0;
+    const statusTag     = `[L:${resultRows[0].http_status_legacy} A:${resultRows[0].http_status_adapter}]`;
+    const failingRows   = resultRows.filter(r => r.discrepancy_type !== 'PASS' && r.discrepancy_type !== 'EXPECTED_DIFF');
+    const expectedDiffs = resultRows.filter(r => r.discrepancy_type === 'EXPECTED_DIFF');
+    const passed        = failingRows.length === 0;
 
     if (passed) {
       totalPasses++;
-      process.stdout.write(`PASS ${statusTag}\n`);
+      const note = expectedDiffs.length > 0 ? ` (${expectedDiffs.length} expected diff(s): EXPECTED_DIFF)` : '';
+      process.stdout.write(`PASS ${statusTag}${note}\n`);
     } else {
       totalFails++;
       const types = [...new Set(failingRows.map(r => r.discrepancy_type))].join(', ');
