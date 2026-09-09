@@ -1,5 +1,5 @@
 import { CompanyRow } from '../db/companymaster';
-import { odgPost } from '../upstream/odgClient';
+import { odgPost, UpstreamError } from '../upstream/odgClient';
 import { OdgCalculatorResponse } from '../types/odg';
 import { LegacyCalculatorResponse, LegacyCalcIcdCodeItem, LegacyFormat } from '../types/legacy';
 import { parseXmlBody, xmlStr, xmlStrArray, xmlRootKey } from '../parsers/xmlBody';
@@ -15,7 +15,7 @@ export interface CalcXmlInput {
   age?: number;
   jds?: number;
   dataType?: string;
-  jobClass?: number;
+  jobClass?: string;  // raw string; preserves leading zeros for 4-digit NCCI codes (e.g. "0172")
   medicalonly?: string;
   aww?: number;
   edl?: number;
@@ -56,6 +56,11 @@ export function parseCalcXml(raw: Buffer | string): CalcXmlInput {
   const parsed = parseXmlBody(raw);
   // Accept any root element name (<request>, <cbcalc>, <reservecalc>, etc.)
   const root = xmlRootKey(parsed);
+
+  // Root element with no children (e.g. <cbcalc></cbcalc>) parses to an empty string — treat as invalid XML.
+  if (!parsed[root] || typeof parsed[root] !== 'object') {
+    throw new LegacyError(ERRORS.INVALID_XML());
+  }
 
   const r = (key: string) => xmlStr(parsed, root, key);
 
@@ -100,11 +105,23 @@ export function parseCalcXml(raw: Buffer | string): CalcXmlInput {
   return {
     clientid: r('clientid') ?? undefined,
     country: r('country') ?? 'US',
-    state: r('state') ?? 'US',
+    state: (() => {
+      const s = r('state');
+      if (s) return s;
+      return (r('country') ?? 'US').toUpperCase() === 'AU' ? 'AUS' : 'US';
+    })(),
     age: safeInt(r('age')),
     jds: safeFloat(r('jds')),
     dataType: r('datatype') ?? undefined,
-    jobClass: safeInt(r('jobclass')),
+    jobClass: (() => {
+      const raw = r('jobclass');
+      if (!raw) return undefined;
+      // If length > 1 or numeric value > 5 it is an NCCI code — pad to 4 digits to
+      // preserve leading zeros (e.g. "172" → "0172", "0172" stays "0172").
+      // Single-digit values 1–5 are DOL job classes and need no padding.
+      const n = parseInt(raw, 10);
+      return (!isNaN(n) && (raw.length > 1 || n > 5)) ? raw.padStart(4, '0') : raw;
+    })(),
     medicalonly: r('medicalonly') ?? undefined,
     aww: safeFloat(r('aww')),
     edl: safeFloat(r('edl')),
@@ -144,10 +161,14 @@ export function buildCalcRequest(
   if (input.jds != null) body.jds = input.jds;
   if (input.dataType) body.dataType = input.dataType;
   if (input.jobClass != null) {
-    if (input.jobClass > 5) body.ncci = input.jobClass;
-    else body.jobClass = input.jobClass;
+    // NCCI codes are padded to 4 digits during parsing (length > 1).
+    // DOL job classes are single-digit strings "1"–"5".
+    // Must check length, not numeric value, because NCCI codes like "0005" parse
+    // to integer 5 which would incorrectly route to the DOL branch if compared as > 5.
+    if (input.jobClass.length > 1) body.ncci = input.jobClass;   // 4-digit NCCI string e.g. "0005"
+    else body.jobClass = parseInt(input.jobClass, 10);            // DOL class integer 1–5
   }
-  if (input.medicalonly != null) body.medicalonly = input.medicalonly;
+  if (input.medicalonly != null) body.medicalonly = (input.medicalonly === '1' || input.medicalonly.toUpperCase() === 'M') ? 1 : 0;
   if (input.aww != null) body.aww = input.aww;
   if (input.edl != null) body.edl = input.edl;
   if (input.comprate != null) body.comprate = input.comprate;
@@ -155,7 +176,10 @@ export function buildCalcRequest(
   if (input.lostWages != null) body.lostWages = input.lostWages;
   if (input.injuryDate) body.injuryDate = `${input.injuryDate}T00:00:00Z`;
   if (input.surgeryDate) body.surgeryDate = `${input.surgeryDate}T00:00:00Z`;
-  if (input.fnolCodes) body.fnolCodes = input.fnolCodes;
+  if (input.fnolCodes) {
+    const fnolKey = input.country.toUpperCase() === 'AU' ? 'toocsCodes' : 'fnolCodes';
+    body[fnolKey] = input.fnolCodes;
+  }
   if (input.procSummary) {
     const ps: Record<string, unknown> = {};
     if (input.procSummary.cpt.length)   ps.cpt   = { codes: input.procSummary.cpt };
@@ -228,6 +252,17 @@ function formatFixedFields(obj: Record<string, unknown>, keys: string[], decimal
   return result;
 }
 
+// When a cfactor has multiple triggers (e.g. surgery), prefer CPT codes over ICD
+// procedure codes. ICD procedure codes contain a decimal (e.g. "85.11"); CPT codes
+// do not (e.g. "22840"). Within the preferred group, use the last code — legacy API
+// returns only one trigger.
+function selectPreferredTrigger(triggers: unknown[]): string | null {
+  const strs = triggers.map(String).filter((s) => s.length > 0);
+  if (strs.length === 0) return null;
+  const cptCodes = strs.filter((s) => !s.includes('.'));
+  return cptCodes.length > 0 ? cptCodes[cptCodes.length - 1] : strs[strs.length - 1];
+}
+
 /**
  * Maps an ODG v1.2 calculator response to the legacy response shape.
  *
@@ -265,8 +300,19 @@ export function mapCalcResponse(
     adjustedsummaryguidelines: service === 'reserve' ? undefined : data.adjustedSummaryGuidelines ?? undefined,
     comprate: data.compRate != null ? formatCurrency(data.compRate) : undefined,
     icdcodes: input.fulloutput && Array.isArray(data.icdCodes?.icdcode)
-      ? {
-          icdcode: data.icdCodes!.icdcode!.map((item): LegacyCalcIcdCodeItem => ({
+      ? (() => {
+          // When FNOL codes are present, ODG resolves them to ICDs and includes those
+          // in the icdcodes response. Legacy only returns explicitly submitted ICD codes.
+          // If both FNOL and ICD codes were given: filter to only the explicit ICD codes.
+          // If only FNOL (no explicit ICD codes): skip icdcodes entirely.
+          const hasFnol = input.fnolCodes && input.fnolCodes.length > 0;
+          const explicitIcds = input.icdCodes;
+          if (hasFnol && explicitIcds.length === 0) return undefined;
+          const sourceItems = hasFnol
+            ? data.icdCodes!.icdcode!.filter((item) => explicitIcds.includes(item.code ?? ''))
+            : data.icdCodes!.icdcode!;
+          if (sourceItems.length === 0) return undefined;
+          const items = sourceItems.map((item): LegacyCalcIcdCodeItem => ({
             code: item.code,
             name: item.name,
             stcode: item.stcode ?? null,
@@ -277,28 +323,79 @@ export function mapCalcResponse(
                   cp100: item.meanDurationDays.claimMax,
                 }
               : undefined,
-          })),
-        }
+          }));
+          return format === 'json' ? items : { icdcode: items };
+        })()
       : undefined,
-    fnolcodes: data.fnolCodes ?? undefined,
+    fnolcodes: input.fulloutput && data.fnolCodes
+      ? (() => {
+          // Strip icdcodes from each fnolcodes item — legacy output does not include it.
+          // fnolCodes may be a direct array or a wrapper object like { fnolcode: [...] }.
+          const stripIcdcodes = (item: unknown): unknown => {
+            if (item && typeof item === 'object' && !Array.isArray(item)) {
+              const out: Record<string, unknown> = {};
+              for (const [k, v] of Object.entries(item as Record<string, unknown>)) {
+                if (k.toLowerCase() !== 'icdcodes') out[k] = v;
+              }
+              return out;
+            }
+            return item;
+          };
+          const raw = data.fnolCodes as Record<string, unknown>;
+          if (Array.isArray(raw)) {
+            return raw.map(stripIcdcodes);
+          }
+          // Wrapper object: strip from items in any nested array (e.g. { fnolcode: [...] })
+          const result: Record<string, unknown> = {};
+          for (const [k, v] of Object.entries(raw)) {
+            result[k] = Array.isArray(v) ? v.map(stripIcdcodes) : v;
+          }
+          return result;
+        })()
+      : undefined,
     procsummary: (() => {
       if (!data.procsummary) return undefined;
-      if (format === 'json') {
-        const cpts = data.procsummary.cptcodes?.cptcode;
-        if (!Array.isArray(cpts) || cpts.length === 0) return undefined;
-        return {
-          cptcodes: cpts.map((c) => ({
+
+      const cpts = data.procsummary.cptcodes?.cptcode;
+      const procIcds = data.procsummary.icdcodes?.icdcode;
+
+      const hasCpt = Array.isArray(cpts) && cpts.length > 0;
+
+      const cptArray = hasCpt
+        ? cpts!.map((c) => ({ code: c.code, name: c.name, meandurationdays: c.meanDurationDays }))
+        : null;
+      const cptcodes = cptArray
+        ? { cptcodes: format === 'json' ? cptArray : { cptcode: cptArray } }
+        : {};
+
+      // ICD procedure codes: always include when present. Exclude superprocedurename
+      // and format meandurationdays to 3 decimal places (e.g. 24.300, 17.000).
+      const procIcdArray = Array.isArray(procIcds) && procIcds.length > 0
+        ? procIcds.map((c) => ({
             code: c.code,
             name: c.name,
-            meandurationdays: c.meanDurationDays,
-          })),
-        };
-      }
-      return data.procsummary as LegacyCalculatorResponse['procsummary'];
+            meandurationdays: c.meanDurationDays != null ? c.meanDurationDays.toFixed(3) : undefined,
+          }))
+        : null;
+      const icdcodes = procIcdArray
+        ? { icdcodes: format === 'json' ? procIcdArray : { icdcode: procIcdArray } }
+        : {};
+
+      const result = { ...cptcodes, ...icdcodes };
+      return Object.keys(result).length > 0 ? result : undefined;
     })(),
     cfactors: data.cfactors
       ? Object.fromEntries(
-          Object.entries(data.cfactors).map(([k, v]) => [
+          Object.entries(data.cfactors)
+            .filter(([, v]) => {
+              // Exclude factors where applied === 0 — ODG API returns these when
+              // a factor was evaluated but not applied; legacy never surfaces them.
+              if (v == null || typeof v !== 'object' || Array.isArray(v)) return true;
+              const raw = (v as Record<string, unknown>).applied;
+              const applied = Array.isArray(raw) ? raw[0] : raw;
+              return applied == null || String(applied) !== '0';
+            })
+            .map(([k, v]) => [
             k,
             Array.isArray(v)
               ? (v[0] != null ? String(v[0]) : null)
@@ -306,7 +403,8 @@ export function mapCalcResponse(
               ? Object.fromEntries(
                   Object.entries(v as Record<string, unknown>).map(([ik, iv]) => [
                     ik,
-                    Array.isArray(iv) ? (iv[0] != null ? String(iv[0]) : null)
+                    Array.isArray(iv)
+                      ? (ik === 'trigger' ? selectPreferredTrigger(iv) : (iv[0] != null ? String(iv[0]) : null))
                       : typeof iv === 'number' ? String(iv)
                       : ik === 'alert' && typeof iv === 'string' ? iv.toLowerCase()
                       : iv,
@@ -340,8 +438,17 @@ export async function handleComorbidity(
   const input = parseCalcXml(raw);
   // TODO/confirm: requestedoutput enum value for comorbidity
   const body = buildCalcRequest(input, 'RasAndRtw');
-  const data = await odgPost<OdgCalculatorResponse>(company, '/calculator', body);
-  return mapCalcResponse(data, input, format, 'comorbidity');
+  try {
+    const data = await odgPost<OdgCalculatorResponse>(company, '/calculator', body);
+    return mapCalcResponse(data, input, format, 'comorbidity');
+  } catch (err) {
+    // FNOL codes that ODG cannot resolve to a valid ICD → upstream returns 404.
+    // Map to legacy 400 "invalid codes" so the customer knows their FNOL codes are bad.
+    if (err instanceof UpstreamError && (err.statusCode === 404 || err.statusCode === 400) && input.fnolCodes?.length) {
+      throw new LegacyError(ERRORS.INVALID_CODES());
+    }
+    throw err;
+  }
 }
 
 export async function handleReserve(
@@ -352,8 +459,17 @@ export async function handleReserve(
   const input = parseCalcXml(raw);
   // TODO/confirm: requestedoutput enum value for reserve
   const body = buildCalcRequest(input, 'RasRtwCosts');
-  const data = await odgPost<OdgCalculatorResponse>(company, '/calculator', body);
-  return mapCalcResponse(data, input, format, 'reserve');
+  try {
+    const data = await odgPost<OdgCalculatorResponse>(company, '/calculator', body);
+    return mapCalcResponse(data, input, format, 'reserve');
+  } catch (err) {
+    // FNOL codes that ODG cannot resolve to a valid ICD → upstream returns 404.
+    // Map to legacy 400 "invalid codes" so the customer knows their FNOL codes are bad.
+    if (err instanceof UpstreamError && (err.statusCode === 404 || err.statusCode === 400) && input.fnolCodes?.length) {
+      throw new LegacyError(ERRORS.INVALID_CODES());
+    }
+    throw err;
+  }
 }
 
 export function buildCalcModel(result: LegacyCalculatorResponse): Record<string, unknown> {

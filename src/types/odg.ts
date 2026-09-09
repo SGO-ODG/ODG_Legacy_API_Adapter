@@ -179,6 +179,13 @@ export interface OdgCalcCptCodeItem {
   meanDurationDays?: number;
 }
 
+export interface OdgCalcProcIcdCodeItem {
+  code?: string;
+  name?: string;
+  superProcedureName?: string;  // excluded from legacy output
+  meanDurationDays?: number;
+}
+
 export interface OdgCalculatorResponse {
   clientId?: string;
   adjustedSummaryGuidelines?: Record<string, unknown>;
@@ -187,7 +194,10 @@ export interface OdgCalculatorResponse {
   compRate?: number;
   icdCodes?: { icdcode?: OdgCalcIcdCodeItem[] };
   cfactors?: Record<string, unknown>;
-  procsummary?: { cptcodes?: { cptcode?: OdgCalcCptCodeItem[] } };
+  procsummary?: {
+    cptcodes?: { cptcode?: OdgCalcCptCodeItem[] };
+    icdcodes?: { icdcode?: OdgCalcProcIcdCodeItem[] };
+  };
   alertdesc?: Record<string, unknown>;
   riskAssessment?: Record<string, unknown>;
   notes?: unknown[];

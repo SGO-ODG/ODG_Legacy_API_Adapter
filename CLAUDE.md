@@ -157,3 +157,16 @@ The previous PHP maintenance response (`Web service is down for maintenance.`) i
 - Compare legacy PHP and adapter results manually for status, `Content-Type`, error text, XML element names/order, JSON field casing, singleton/array behavior, date/number formatting, `clientid`, and `rescount`; test both the default route (XML) and the same route with `/format/json` (JSON).
 - Do not create local API-call audit or usage logs. Database access is read-only; ODG API logs are the audit source. Never log keys, secrets, bearer tokens, raw XML, or upstream payloads containing customer data.
 - Keep PHP live and authoritative during the parallel-hostname phase; do not cut traffic over without parity sign-off and a gateway route-back path.
+
+## Test input file conventions
+
+Every test case in a comparison CSV must appear **twice** — once for XML output and once for JSON output — using the same request body/params:
+
+- **XML row**: use the base `url_path` (e.g. `/calculator/comorbidity`, `/restws/bpguide?icd=724.2`)
+- **JSON row**: append or insert `/format/json` and name it `<test_name>_json`
+  - Query-string URLs: insert before `?` → `/restws/bpguide/format/json?icd=724.2`
+  - Path-style URLs: append at end → `/restws/bpguide/icd/724.2/format/json`
+  - POST XML endpoints: change base path → `/calculator/comorbidity/format/json`
+  - Error / no-result cases must also have JSON variants — the error response format differs between XML and JSON and both must be verified
+
+Place the XML row first, the `_json` companion row immediately after it. Do not add sparse JSON-only rows for a subset of scenarios — every scenario needs both.
