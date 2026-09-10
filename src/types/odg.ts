@@ -200,7 +200,7 @@ export interface OdgCalculatorResponse {
   };
   alertdesc?: Record<string, unknown>;
   riskAssessment?: Record<string, unknown>;
-  notes?: unknown[];
+  notes?: Record<string, unknown>;
   fnolCodes?: Record<string, unknown>;
   odgByMcgLinks?: OdgByMcgLinks;
 }

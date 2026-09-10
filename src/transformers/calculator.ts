@@ -329,8 +329,9 @@ export function mapCalcResponse(
       : undefined,
     fnolcodes: input.fulloutput && data.fnolCodes
       ? (() => {
-          // Strip icdcodes from each fnolcodes item — legacy output does not include it.
-          // fnolCodes may be a direct array or a wrapper object like { fnolcode: [...] }.
+          // Legacy has a single bp/noi code so fnolcodes is always an object, not an array.
+          // ODG may return fnolCodes as a single-element array — unwrap to the element.
+          // Strip icdcodes from the object — legacy output does not include it.
           const stripIcdcodes = (item: unknown): unknown => {
             if (item && typeof item === 'object' && !Array.isArray(item)) {
               const out: Record<string, unknown> = {};
@@ -341,16 +342,10 @@ export function mapCalcResponse(
             }
             return item;
           };
-          const raw = data.fnolCodes as Record<string, unknown>;
-          if (Array.isArray(raw)) {
-            return raw.map(stripIcdcodes);
-          }
-          // Wrapper object: strip from items in any nested array (e.g. { fnolcode: [...] })
-          const result: Record<string, unknown> = {};
-          for (const [k, v] of Object.entries(raw)) {
-            result[k] = Array.isArray(v) ? v.map(stripIcdcodes) : v;
-          }
-          return result;
+          const raw = data.fnolCodes as unknown;
+          // Unwrap single-element array to plain object
+          const obj = Array.isArray(raw) ? raw[0] : raw;
+          return stripIcdcodes(obj) as Record<string, unknown>;
         })()
       : undefined,
     procsummary: (() => {
@@ -409,7 +404,7 @@ export function mapCalcResponse(
                   ik,
                   Array.isArray(iv)
                     ? (ik === 'trigger' ? selectPreferredTrigger(iv) : (iv[0] != null ? String(iv[0]) : null))
-                    : ik === 'applied' ? parseInt(String(iv), 10)
+                    : ik === 'applied' ? String(parseInt(String(iv), 10))
                     : typeof iv === 'number' ? String(iv)
                     : ik === 'alert' && typeof iv === 'string' ? iv.toLowerCase()
                     : iv,
@@ -422,12 +417,12 @@ export function mapCalcResponse(
     })(),
     alertdesc: data.alertdesc ?? undefined,
     notes: data.notes
-      ? (Array.isArray(data.notes) ? data.notes : [data.notes]).map((n) => {
-          let note = deepRenameKey(n as Record<string, unknown>, 'bestPractice', 'bp');
-          note = deepRenameKey(note as Record<string, unknown>, 'claimAverage', 'cp95');
-          note = deepRenameKey(note as Record<string, unknown>, 'claimMax', 'cp100');
-          return note;
-        })
+      ? (() => {
+          let n = deepRenameKey(data.notes as Record<string, unknown>, 'bestPractice', 'bp');
+          n = deepRenameKey(n as Record<string, unknown>, 'claimAverage', 'cp95');
+          n = deepRenameKey(n as Record<string, unknown>, 'claimMax', 'cp100');
+          return n as Record<string, unknown>;
+        })()
       : undefined,
     odgurl: data.odgByMcgLinks?.duration ?? null,
     deeplinkurl: data.odgByMcgLinks?.duration ?? null,

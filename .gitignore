@@ -9,5 +9,6 @@ data/*.sqlite
 coverage/
 node_modules/
 dist/
-api-tester/tests-scripts/input/
 api-tester/tests-scripts/output/
+.claude/skills/compare-api-script/SKILL.md
+tasks/todo.md
