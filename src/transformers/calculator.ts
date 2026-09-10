@@ -361,9 +361,12 @@ export function mapCalcResponse(
 
       const hasCpt = Array.isArray(cpts) && cpts.length > 0;
 
-      const cptArray = hasCpt
-        ? cpts!.map((c) => ({ code: c.code, name: c.name, meandurationdays: c.meanDurationDays }))
-        : null;
+      const cptFiltered = hasCpt
+        ? cpts!
+            .map((c) => ({ code: c.code, name: c.name, meandurationdays: c.meanDurationDays }))
+            .filter((c) => (c.meandurationdays ?? 0) > 0)
+        : [];
+      const cptArray = cptFiltered.length > 0 ? cptFiltered : null;
       const cptcodes = cptArray
         ? { cptcodes: format === 'json' ? cptArray : { cptcode: cptArray } }
         : {};
@@ -384,36 +387,39 @@ export function mapCalcResponse(
       const result = { ...cptcodes, ...icdcodes };
       return Object.keys(result).length > 0 ? result : undefined;
     })(),
-    cfactors: data.cfactors
-      ? Object.fromEntries(
-          Object.entries(data.cfactors)
-            .filter(([, v]) => {
-              // Exclude factors where applied === 0 — ODG API returns these when
-              // a factor was evaluated but not applied; legacy never surfaces them.
-              if (v == null || typeof v !== 'object' || Array.isArray(v)) return true;
-              const raw = (v as Record<string, unknown>).applied;
-              const applied = Array.isArray(raw) ? raw[0] : raw;
-              return applied == null || String(applied) !== '0';
-            })
-            .map(([k, v]) => [
-            k,
-            Array.isArray(v)
-              ? (v[0] != null ? String(v[0]) : null)
-              : v != null && typeof v === 'object'
-              ? Object.fromEntries(
-                  Object.entries(v as Record<string, unknown>).map(([ik, iv]) => [
-                    ik,
-                    Array.isArray(iv)
-                      ? (ik === 'trigger' ? selectPreferredTrigger(iv) : (iv[0] != null ? String(iv[0]) : null))
-                      : typeof iv === 'number' ? String(iv)
-                      : ik === 'alert' && typeof iv === 'string' ? iv.toLowerCase()
-                      : iv,
-                  ]),
-                )
-              : typeof v === 'number' ? String(v) : v,
-          ]),
-        )
-      : undefined,
+    cfactors: (() => {
+      if (!data.cfactors) return undefined;
+      const mapped = Object.fromEntries(
+        Object.entries(data.cfactors)
+          .filter(([, v]) => {
+            // Exclude factors where applied === 0 — ODG API returns these when
+            // a factor was evaluated but not applied; legacy never surfaces them.
+            if (v == null || typeof v !== 'object' || Array.isArray(v)) return true;
+            const raw = (v as Record<string, unknown>).applied;
+            const applied = Array.isArray(raw) ? raw[0] : raw;
+            return applied == null || String(applied) !== '0';
+          })
+          .map(([k, v]) => [
+          k,
+          Array.isArray(v)
+            ? (v[0] != null ? String(v[0]) : null)
+            : v != null && typeof v === 'object'
+            ? Object.fromEntries(
+                Object.entries(v as Record<string, unknown>).map(([ik, iv]) => [
+                  ik,
+                  Array.isArray(iv)
+                    ? (ik === 'trigger' ? selectPreferredTrigger(iv) : (iv[0] != null ? String(iv[0]) : null))
+                    : ik === 'applied' ? parseInt(String(iv), 10)
+                    : typeof iv === 'number' ? String(iv)
+                    : ik === 'alert' && typeof iv === 'string' ? iv.toLowerCase()
+                    : iv,
+                ]),
+              )
+            : typeof v === 'number' ? String(v) : v,
+        ]),
+      );
+      return Object.keys(mapped).length > 0 ? mapped : undefined;
+    })(),
     alertdesc: data.alertdesc ?? undefined,
     notes: data.notes
       ? (Array.isArray(data.notes) ? data.notes : [data.notes]).map((n) => {
