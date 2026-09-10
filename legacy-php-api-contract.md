@@ -44,6 +44,8 @@ Returns every NDC record with: `ndcCode`, `brandName`, `genericName`, `tradeName
 
 CSV is supported. When `clientid` is supplied, the legacy output also adds `rescount` and `clientid`.
 
+Adapter implementation pages through `/formulary/ndc` using `pageSize=100` and repeats until `totalRecords` are collected, then returns the full unpaginated array.
+
 ## GET `/restws/uradvisor`
 
 | Parameter | Required | Behavior |
@@ -115,6 +117,17 @@ Each record:
 
 Only ICDs with at least one populated guide section are returned. `clientid` adds `rescount` and `clientid`.
 
+FNOL fallback: when `bp`/`noi` are provided instead of `icd`, the adapter calls `/tao/fnol/{bp}/{noi}` and extracts the `icds[]` array from the response, then uses those codes to call `/guidelines`. If the FNOL endpoint returns no ICDs, returns 400 with the invalid FNOL codes error.
+
+Upstream field mappings (confirmed):
+- `code` → `icdcode`, `description` → `name`
+- `bestPracticeGuidelines[].pathway` → `bp[].primaryRTWpath`; `.minDays` → `bp[].days1`; `.maxDays` → `bp[].days`
+- `activityModifiers[].jobType` → `activitymod[].jobtype`; `.jobModification` → `activitymod[].jobmodification`
+- `physicalTherapyVisits[].pathway` → `pt[].primarypath`; `.visits` → `pt[].visits`; `.weeks` → `pt[].weeks`
+- `chiropractorVisits[].pathway` → `chiro[].primarypath`; `.visits` → `chiro[].visits`; `.weeks` → `chiro[].weeks`
+
+ICD family detection: codes starting with a letter (e.g. `M54.5`) are ICD-10; otherwise ICD-9. Sent as `icd10=<code>` or `icd9=<code>` query params to `/guidelines`.
+
 ## POST `/restws/procsum`
 
 **Lifecycle: End of life.** This source-derived contract is retained only to document the existing PHP behavior. It must not be implemented in the new Express compatibility layer.
@@ -170,7 +183,7 @@ Response record:
 </request>
 ```
 
-`text` is required and must be at least two characters. At least one database flag must exist. A database is selected only when its value is exactly `Y`.
+`text` is required and must be at least two characters. At least one database flag must exist. A database is selected only when its value is exactly `Y`. If no database flag is `Y`, returns 404 `One or more database element child (search in) required to process your request.`
 
 Response variants:
 
@@ -182,18 +195,21 @@ Response variants:
 
 Other-name and best-practice hits are emitted as `ICD9` or `ICD10`. `clientid` adds `rescount` and `clientid`.
 
+Upstream `/search` type values (confirmed): `icd9search`, `icd10search`, `procedurescpt`, `formularyndc`, `treatment`. The `section` field in each result set is mapped back to legacy `type` values. CPT result items use `procedureCode` for the code field; ICD items use `icdCode`; NDC items use `proprietaryName`/`nonProprietaryName`/`tradeName`; PROCT items use `primaryChapter`.
+
 ## POST `/calculator/comorbidity`
 ## POST `/calculator/reserve`
 
-Both endpoints accept the same XML structure:
+Both endpoints accept the same XML structure. Any root element name is accepted (`<cbcalc>`, `<reservecalc>`, `<request>`, etc.):
 
 ```xml
 <request>
   <clientid>...</clientid><country>US|AU</country><state>...</state>
-  <age>...</age><jds>0-100</jds><datatype>...</datatype><jobclass>...</jobclass>
+  <age>...</age><jds>0-100</jds><datatype>WC|NO</datatype><jobclass>...</jobclass>
   <medicalonly>0|1|M</medicalonly><aww>...</aww><edl>...</edl>
   <comprate>...</comprate><mdd>...</mdd><lostwages>...</lostwages>
-  <injurydate>...</injurydate><surgerydate>...</surgerydate><fulloutput>Y</fulloutput>
+  <injurydate>YYYY-MM-DD</injurydate><surgerydate>YYYY-MM-DD</surgerydate>
+  <fulloutput>Y</fulloutput>
   <icdcodes><code>...</code></icdcodes><bpcode>...</bpcode><noicode>...</noicode>
   <procsummary>
     <cpt><code>...</code></cpt><hcpcs><code>...</code></hcpcs>
@@ -210,29 +226,67 @@ Both endpoints accept the same XML structure:
 
 Shared behavior:
 
-- At least one valid diagnosis, CPT/HCPCS, or ICD procedure must survive validation.
-- `state` defaults to `US`; `country` defaults to `US`.
-- `jds` takes precedence over `jobclass`.
-- Direct ICDs can fall back to `bpcode`/`noicode` FNOL mapping.
+- At least one valid diagnosis, CPT/HCPCS, or ICD procedure must survive validation. Error: 404 `One or more valid Diagnosis (ICD) or Procedure (CPT) code required to calculate.`
+- `state` defaults to `US`; `country` defaults to `US`. For `country=AU` with no `state`, state defaults to `AUS`.
+- `jds` (0–100) takes precedence over `jobclass` when both are provided.
+- `jobclass` 1–5 are DOL physical demand levels (sent upstream as integer `jobClass`). Any other value (length > 1 digit, or numeric value > 5) is treated as a 4-digit NCCI occupation code, padded with leading zeros (e.g. `172` → `0172`), and sent upstream as string `ncci`.
+- Direct ICDs can fall back to `bpcode`/`noicode` FNOL mapping when ICD lookup returns no results.
+- FNOL codes (`bpcode`/`noicode`) are zero-padded to 2 digits. For `country=AU`, the upstream field is `toocsCodes` (not `fnolCodes`).
 - Repeated code values are de-duplicated.
-- `fulloutput=Y` enables detailed sections.
+- `fulloutput=Y` enables detailed sections (`icdcodes`, `procsummary`, `cfactors`, `alertdesc`, `fnolcodes`).
+- `cfactors` entries with `applied=0` (evaluated but not applied by ODG) are filtered from the response.
+- `preexisting` in legacy XML maps to `preExisting` (capital E) upstream.
+- `injurydate`/`surgerydate` are sent upstream with `T00:00:00Z` appended.
+- `odgurl` and `deeplinkurl` both map to `odgByMcgLinks.duration` from the ODG response.
 
-Comorbidity returns risk assessment and, unless medical-only, adjusted duration. Reserve always returns `projectedcosts`; it uses a supplied `edl` directly or calculates duration when omitted.
+### Comorbidity-specific behavior
 
-Common calculator response fields:
+- Upstream `requestedoutput`: `RasAndRtw`
+- Returns: `riskassessment`, `adjustedduration` (unless `medicalonly` is set), `adjustedsummaryguidelines` (always), `cfactors`, `alertdesc`
+- Does **not** return: `projectedcosts`, `notes`
+- `riskassessment.ssdiFlag` is omitted; `magnitude` and `volatility` are formatted to 2 decimal places
+
+### Reserve-specific behavior
+
+- Upstream `requestedoutput`: `RasRtwCosts`
+- Returns: `riskassessment`, `projectedcosts` (always), `adjustedduration` (only when `fulloutput=Y`), `comprate` (formatted as `$N,NNN.NN`), `notes` (when present)
+- Does **not** return: `adjustedsummaryguidelines`
+- `projectedcosts` contains `bp`, `cp95`, `cp100` tiers, each with `indemnity`, `medical`, `expense`, `total` formatted as US currency
+
+### Response field reference
 
 ```json
 {
-  "clientid": "...", "odgurl": "...", "deeplinkurl": "...", "comprate": "$0.00",
-  "riskassessment": {}, "adjustedduration": {}, "projectedcosts": {},
-  "adjustedsummaryguidelines": {}, "icdcodes": [],
+  "clientid": "...",
+  "odgurl": "...",
+  "deeplinkurl": "...",
+  "comprate": "$0.00",
+  "riskassessment": { "score": "...", "status": "...", "magnitude": "0.00", "volatility": "0.00" },
+  "adjustedduration": {
+    "bp": { "days": "..." }, "cp95": { "days": "..." }, "cp100": { "days": "..." }
+  },
+  "projectedcosts": {
+    "bp":   { "indemnity": "$0.00", "medical": "$0.00", "expense": "$0.00", "total": "$0.00" },
+    "cp95": { "indemnity": "$0.00", "medical": "$0.00", "expense": "$0.00", "total": "$0.00" },
+    "cp100":{ "indemnity": "$0.00", "medical": "$0.00", "expense": "$0.00", "total": "$0.00" }
+  },
+  "adjustedsummaryguidelines": {},
+  "icdcodes": { "icdcode": [{ "code": "...", "name": "...", "stcode": "...", "meandurationdays": { "bp": "...", "cp95": "...", "cp100": "..." } }] },
   "fnolcodes": { "bodypart": { "code": "...", "name": "..." }, "natureofinjury": { "code": "...", "name": "..." } },
-  "procsummary": { "cptcodes": [], "icdcodes": [] },
-  "cfactors": {}, "alertdesc": { "red": "...", "yellow": "..." }, "notes": []
+  "procsummary": {
+    "cptcodes": { "cptcode": [{ "code": "...", "name": "...", "meandurationdays": "..." }] },
+    "icdcodes": { "icdcode": [{ "code": "...", "name": "...", "meandurationdays": "0.000" }] }
+  },
+  "cfactors": {},
+  "alertdesc": { "red": "...", "yellow": "..." },
+  "notes": []
 }
 ```
 
-`riskassessment` and `adjustedduration` are Comorbidity-oriented. `projectedcosts` and optional `notes` are Reserve-oriented. Most detailed fields are conditional on `fulloutput=Y`.
+Notes on conditional fields:
+- `icdcodes`, `fnolcodes`, `procsummary`, `cfactors`, `alertdesc` only appear when `fulloutput=Y`
+- Procsummary CPT items with `meandurationdays=0` are filtered. ICD proc `meandurationdays` is formatted to 3 decimal places (e.g. `24.300`)
+- `cfactors` surgery trigger: CPT code preferred over ICD procedure code when multiple triggers exist; only the last trigger in the preferred group is returned
 
 ## Source limitations
 

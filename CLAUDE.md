@@ -143,12 +143,14 @@ The previous PHP maintenance response (`Web service is down for maintenance.`) i
 
 ## Important mapping rules and known gaps
 
-- NDC Advisor: normalize numeric input to `NNNNN-NNNN`; direct NDC uses `/formulary/ndc/{ndcCode}`, lists/keyword use `/formulary/ndc`, and `country=AU` uses PBS endpoints. Confirm mapping for legacy `GE`, `status`, and full-output `procsummary` before shipping.
-- NDC Download: fetch all `/formulary/ndc` pages and return the unpaginated legacy record array. Confirm upstream page maximum and stable ordering.
-- UR Advisor: map legacy ICD/CPT/procedure/country/flags/client ID/full mode into TAO inputs. Confirm `icd=9|10` ResultType values, FNOL branch semantics, and upstream parent/child grouping before shipping.
-- Best Practice Guide: map ICD-9/ICD-10 arrays to `/guidelines`; resolve legacy FNOL to ICD first. Transform `code`, `description`, best-practice, activity, PT, and chiropractic collections back to legacy `icdcode`, `name`, `bp`, `activitymod`, `pt`, `chiro` fields. Confirm every nested field.
-- One Search: map XML `text` to `/search?query=...`; derive `/search.type` from selected legacy databases. Confirm the allowed new `type` values, search-result item schema, and type-to-legacy mapping.
-- Calculators: parse legacy XML and map ICD, procedure-summary, FNOL, claim, dates, and confounding-factor fields into `/calculator` JSON. Candidate `requestedoutput`: `RasAndRtw` for Comorbidity and `RasRtwCosts` for Reserve; confirm these values. Preserve legacy deep-link/ODG URL behavior outside the upstream response because v1.2 does not provide those fields.
+- NDC Advisor: normalize numeric input to `NNNNN-NNNN`; direct NDC uses `/formulary/ndc/{ndcCode}`, lists/keyword use `/formulary/ndc`, and `country=AU` uses PBS endpoints. `GE`, `status` (US) and `drugClass`, `odgGenericName`, `odgGenericEquiv`, `odgStatus` (AU PBS) are not available in the ODG v1.2 response — returned as null pending confirmation.
+- NDC Download: fetch all `/formulary/ndc` pages (`pageSize=100`) and return the unpaginated legacy record array. Confirm upstream maximum pageSize and ordering guarantee.
+- UR Advisor: ICD-driven → `/tao/icds`; `icd=9|10` reverse lookup → `/tao/procedures?resulttype=1` (ICD9) or `resulttype=2` (ICD10); FNOL-only → `/tao/fnol/{bp}/{noi}` (full TAO data returned directly, no secondary call). ICD requests with no results fall back to FNOL when `bp`/`noi` are present. Subscription `outputMode=F` → `FullOutput=1`. AU uses `proc` key.
+- Best Practice Guide: map ICD-9/ICD-10 arrays to `/guidelines` (split by ICD family: letter-prefix = ICD-10); FNOL resolves via `/tao/fnol` → `data.icds[]`. Field mappings confirmed: `bestPracticeGuidelines[].{pathway,minDays,maxDays}`, `activityModifiers[].{jobType,jobModification}`, `physicalTherapyVisits[]/chiropractorVisits[].{pathway,visits,weeks}`.
+- One Search: map XML `text` to `/search?query=...`; confirmed `type` values: `icd9search`, `icd10search`, `procedurescpt`, `formularyndc`, `treatment`. Result items by section: CPT → `procedureCode`, ICD → `icdCode`, PROCT → `primaryChapter`.
+- Comorbidity Calculator: `requestedoutput=RasAndRtw`. Returns `riskassessment` + `adjustedduration` (omitted when `medicalonly`) + `adjustedsummaryguidelines`. No `projectedcosts`.
+- Reserve Calculator: `requestedoutput=RasRtwCosts`. Always returns `projectedcosts` (bp/cp95/cp100 with indemnity/medical/expense/total as currency). Returns `adjustedduration` only when `fulloutput=Y`. No `adjustedsummaryguidelines`.
+- Both Calculators: `jobclass` 1–5 → upstream integer `jobClass`; NCCI codes (any other value) padded to 4 digits → upstream string `ncci`. AU FNOL uses `toocsCodes`. `cfactors` with `applied=0` filtered from response. `preexisting` → `preExisting`. Both `odgurl` and `deeplinkurl` map to `odgByMcgLinks.duration`.
 
 ## Testing and delivery
 
