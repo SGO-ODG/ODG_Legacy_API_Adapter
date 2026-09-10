@@ -6,6 +6,7 @@ data/*.sqlite
 *.xlsx
 
 # Skip Folders
+tasks/
 coverage/
 node_modules/
 dist/

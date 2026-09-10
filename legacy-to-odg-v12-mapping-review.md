@@ -174,7 +174,7 @@ Authorization: Bearer <token>
 X-ApiVersion: 1.2
 ```
 
-Repeat pages until all `totalRecords` are collected. **TODO:** confirm upstream maximum `pageSize`, ordering guarantee, and whether records can change during a paged export.
+Repeat pages until all `totalRecords` are collected. Current implementation uses `pageSize=100`. **TODO:** confirm upstream maximum `pageSize` and stable ordering guarantee.
 
 ### Response transformation
 
@@ -192,11 +192,12 @@ X-ODG-KEY: <key>
 | Legacy condition/parameter | New ODG candidate | Review state |
 |---|---|---|
 | ICD-driven request | `GET /tao/icds?icd=<codes>&proc=<cpt>&Flags=RG&Country=US&ClientId=claim-123&FullOutput=<bool>` | Confirmed endpoint and parameter names. |
-| `icd=9` or `icd=10` plus CPT/PROC | `GET /tao/procedures?proc=<codes>&ResultType=<ICD version>` | **TODO:** `ResultType` enum/value for legacy 9 vs. 10 is not documented in the reviewed schema. |
-| `country=AU` and `proc` | `/tao/icds` with `proc`, `Country=AU` | Confirm with AU test data. |
-| `bp`/`noi` FNOL fallback | `/tao/fnol/{bpCode}/{noiCode}` then `/tao/icds` if needed | **TODO:** confirm whether the direct FNOL response can replace the legacy ICD-derived flow. |
-| `flags=R/G/Y/B` | `Flags` | Confirm value syntax is still identical. |
-| subscription `outputMode=F` | `FullOutput=true` | Candidate mapping; confirm exact boolean semantics. |
+| `icd=9` or `icd=10` plus CPT/PROC | `GET /tao/procedures?proc=<codes>&resulttype=1` (ICD9) or `&resulttype=2` (ICD10) | **Resolved:** `resulttype=1` for ICD9 lookup, `resulttype=2` for ICD10 lookup. Response `items[].procedure` is the CPT/proc parent; `items[].icds[]` are the ICD children with stats. |
+| `country=AU` and `proc` | `/tao/icds` with `proc=<auProcCodes>&Country=AU` | Confirmed. AU uses `proc` key for procedures; response uses `proc` key (not `cpt`) in legacy output. |
+| `bp`/`noi` FNOL-only request | `GET /tao/fnol/{bpCode}/{noiCode}` | **Resolved:** the FNOL endpoint returns full TAO data in `items[].taoDataItems[]`. Those items are flattened and fed directly into `buildUraRecords` — no secondary `/tao/icds` call is needed. Empty result → 400 `INVALID_CODES`. |
+| ICD request with `bp`/`noi` fallback | `/tao/icds` first; if 404 or no procedure results, fallback to `/tao/fnol` | **Resolved:** fallback triggers when `/tao/icds` returns 404 or all groups have empty procedure arrays. |
+| `flags=R/G/Y/B` | `Flags` as repeated query param array | Confirmed. Each character is sent as a separate `Flags` value. |
+| subscription `outputMode=F` | `FullOutput=1` (string `'1'`) | **Resolved:** `outputMode='F'` from `companywebservice` sets `fullOutput=true` in the context; passed upstream as `FullOutput: '1'`. |
 
 ### New ODG response example
 
@@ -257,7 +258,7 @@ X-ODG-KEY: <key>
 | `proctype` | `procedureType` |
 | `avglostdays`, `medianlostdays`, `pctneverreturn`, `pctzerodays`, `taoindex` | `averageLostDays`, `medianLostDays`, `percentNeverReturn`, `percentZeroDays`, `taoIndex` |
 
-**TODO:** confirm how upstream `items` identifies/contains the legacy parent ICD/CPT grouping. That relationship is not shown by the top-level Swagger schema and must be validated with a live response.
+**Resolved:** `/tao/icds` response `items[]` each contain `icd` (parent) and `procedures[]` (children). `/tao/procedures` response `items[]` each contain `procedure` (CPT/proc parent) and `icds[]` (ICD children). Legacy output key for AU is `proc`; for US is `cpt`. ICD child records use `icdfrequency` (not `cptfrequency`) in legacy output.
 
 ## 4. Best Practice Guide â€” `GET /restws/bpguide`
 
@@ -308,15 +309,25 @@ Split validated legacy input by ICD family: send ICD-9 values through `icd9`, IC
 
 | Legacy field | New ODG candidate | Review state |
 |---|---|---|
-| `icdcode` | `code` | Direct. |
-| `name` | `description` | Direct. |
-| `bp.primaryRTWpath` | `bestPracticeGuidelines[].pathway` | Candidate. |
-| `bp.days1`, `bp.days` | `bestPracticeGuidelines[].minDays`, `.maxDays` | Candidate; validate meaning and numeric formatting. |
-| `activitymod` | `activityModifiers` | **TODO:** inspect nested item schema/live response. |
-| `pt` | `physicalTherapyVisits` | **TODO:** inspect nested item schema/live response. |
-| `chiro` | `chiropractorVisits` | **TODO:** inspect nested item schema/live response. |
+| `icdcode` | `code` | Confirmed. |
+| `name` | `description` | Confirmed. |
+| `bp[].primaryRTWpath` | `bestPracticeGuidelines[].pathway` | Confirmed. |
+| `bp[].days1` | `bestPracticeGuidelines[].minDays` | Confirmed. |
+| `bp[].days` | `bestPracticeGuidelines[].maxDays` | Confirmed. |
+| `activitymod[].jobtype` | `activityModifiers[].jobType` | **Resolved.** |
+| `activitymod[].jobmodification` | `activityModifiers[].jobModification` | **Resolved.** |
+| `pt[].primarypath` | `physicalTherapyVisits[].pathway` | **Resolved.** |
+| `pt[].visits` | `physicalTherapyVisits[].visits` | **Resolved.** |
+| `pt[].weeks` | `physicalTherapyVisits[].weeks` | **Resolved.** |
+| `chiro[].primarypath` | `chiropractorVisits[].pathway` | **Resolved.** |
+| `chiro[].visits` | `chiropractorVisits[].visits` | **Resolved.** |
+| `chiro[].weeks` | `chiropractorVisits[].weeks` | **Resolved.** |
 
 Append legacy `rescount` and `clientid` when requested.
+
+FNOL resolution: calls `/tao/fnol/{bp}/{noi}` and extracts `data.icds[]` (string array) as the ICD list for the `/guidelines` call. If `data.icds` is empty, returns 400 `INVALID_FNOL`.
+
+ICD family split for `/guidelines`: codes beginning with a letter → `icd10=<code>`; otherwise `icd9=<code>`.
 
 ## 5. One Search â€” `POST /restws/onesearch`
 
@@ -349,7 +360,17 @@ X-ApiVersion: 1.2
 | `<database><ndc>Y</ndc>` | add an NDC value to `type` |
 | `<database><proct>Y</proct>` | add a procedure-topic value to `type` |
 
-**TODO / required correction:** Swagger documents `type` as an array but does not expose its allowed values in the reviewed schema. Confirm exact values and array serialization with the ODG API owner.
+**Resolved.** Confirmed upstream `type` values:
+
+| Legacy database flag | Upstream `type` value |
+|---|---|
+| `<icd9>Y</icd9>` | `icd9search` |
+| `<icd10>Y</icd10>` | `icd10search` |
+| `<cpt>Y</cpt>` | `procedurescpt` |
+| `<ndc>Y</ndc>` | `formularyndc` |
+| `<proct>Y</proct>` | `treatment` |
+
+Sent as repeated `type` query params: `GET /search?query=...&type=icd9search&type=procedurescpt&facets=false&country=US`
 
 ### New ODG response shape
 
@@ -369,7 +390,17 @@ X-ApiVersion: 1.2
 { "type": "PROCT", "name": "...", "chapter": "..." }
 ```
 
-**TODO / required correction:** The Swagger top-level schema does not define the individual `results` item properties. Confirm the result-item schema and create an explicit section/type-to-legacy-record mapping before implementation.
+**Resolved.** ODG result-set items by section:
+
+| `section` value | Legacy `type` | Legacy fields | ODG item fields used |
+|---|---|---|---|
+| `icd9search` | `ICD9` | `code`, `name` | `icdCode` (fallback `code`), `name`/`description` |
+| `icd10search` | `ICD10` | `code`, `name` | `icdCode` (fallback `code`), `name`/`description` |
+| `procedurescpt` | `CPT` | `code`, `name` | `procedureCode` (fallback `code`), `name`/`description` |
+| `formularyndc` | `NDC` | `code`, `name`, `brand` | `code`/`ndcCode`, `nonProprietaryName`/`name`, `tradeName`/`brand`/`proprietaryName` |
+| `treatment` | `PROCT` | `name`, `chapter` | `name`/`topic`, `primaryChapter`/`chapter` |
+
+Unknown `section` values are silently skipped.
 
 ## 6. Comorbidity Calculator â€” `POST /calculator/comorbidity`
 
@@ -427,24 +458,28 @@ X-ApiVersion: 1.2
 
 | Legacy XML | Swagger v1.2 JSON | Mapping status |
 |---|---|---|
-| `icdcodes/code` | `icdCodes.codes[]` | Confirmed property structure. |
-| `procsummary/{cpt,hcpcs,icd,ndc}/code` | `procSummary.<type>.codes[]` | Confirmed property structure. |
-| `bpcode`, `noicode` | `fnolCodes[].bpcode`, `.noicode` | Confirmed property names. |
-| `clientid`, `country`, `state`, `age`, `jds`, `jobclass`, `aww`, `edl`, `comprate`, `mdd`, `injurydate`, `surgerydate` | corresponding lower/camel-cased Swagger fields | Confirm date parsing and numeric coercion. |
-| `datatype` | `dataType` | Confirm enum values. |
-| `lostwages` | `lostWages` | Direct casing transformation. |
-| `fulloutput=Y` | `fulloutput=1` | Candidate conversion; confirm allowed numeric/boolean form. |
-| `cfactors/preexisting` | `cfactors/preExisting` | Confirm capital `E` required by Swagger. |
-| calculator mode | `requestedoutput` | See required decision below. |
+| `icdcodes/code` | `icdCodes.codes[]` | Confirmed. |
+| `procsummary/{cpt,hcpcs,icd,ndc}/code` | `procSummary.<type>.codes[]` | Confirmed. |
+| `bpcode`, `noicode` | `fnolCodes[].bpcode`, `.noicode` (US); `toocsCodes[].bpcode`, `.noicode` (AU) | **Resolved:** AU uses `toocsCodes` key. |
+| `clientid` | `clientId` | Direct casing. |
+| `country`, `state`, `age`, `jds` | `country`, `state`, `age`, `jds` | Confirmed. |
+| `jobclass` 1–5 (DOL) | `jobClass: <integer>` | **Resolved:** DOL job classes sent as integer. |
+| `jobclass` NCCI (>1 digit or >5) | `ncci: "<4-digit string>"` | **Resolved:** NCCI codes padded to 4 digits, sent as `ncci` string. |
+| `aww`, `edl`, `comprate`, `mdd` | `aww`, `edl`, `comprate`, `mdd` | Confirmed. |
+| `lostwages` | `lostWages` | Confirmed. |
+| `injurydate`, `surgerydate` | `injuryDate`, `surgeryDate` with `T00:00:00Z` appended | Confirmed. |
+| `datatype` | `dataType` | Confirmed (passes `WC`/`NO` as-is). |
+| `fulloutput=Y` | `fulloutput: 1` | **Resolved:** sent as integer `1`. |
+| `cfactors/preexisting` | `cfactors/preExisting` | **Resolved:** capital `E` required. |
+| `medicalonly=1` or `=M` | `medicalonly: 1` | Confirmed coercion. |
+| calculator mode | `requestedoutput` | See decision below. |
 
-### Required `requestedoutput` decision
+### `requestedoutput` values — RESOLVED
 
-| Legacy endpoint | Candidate Swagger enum | Reason | Review state |
-|---|---|---|---|
-| `/calculator/comorbidity` | `RasAndRtw` | Legacy produces risk assessment plus adjusted duration/return-to-work information. | **Confirm.** |
-| `/calculator/reserve` | `RasRtwCosts` | Legacy produces reserve costs and may produce risk/duration details. | **Confirm.** |
-
-If exact legacy behavior cannot be represented by one enum, request the most complete permitted output and discard fields during legacy transformation.
+| Legacy endpoint | Upstream `requestedoutput` | Notes |
+|---|---|---|
+| `/calculator/comorbidity` | `RasAndRtw` | Returns risk assessment + RTW/duration data. |
+| `/calculator/reserve` | `RasRtwCosts` | Returns risk assessment + RTW/duration + projected costs. |
 
 ### New ODG response example
 
@@ -484,18 +519,32 @@ If exact legacy behavior cannot be represented by one enum, request the most com
 }
 ```
 
-| Legacy output | New output candidate | Review state |
+| Legacy output | New ODG field | Review state |
 |---|---|---|
-| `clientid` | `clientId` | Direct casing transform. |
-| `adjustedsummaryguidelines` | `adjustedSummaryGuidelines` | Direct casing transform. |
-| `adjustedduration` | `adjustedDuration` | **TODO:** legacy nested BP/CP95/CP100 structure differs from Swagger percentile fields. |
-| `projectedcosts` | `projectedCosts` | **TODO:** legacy nested BP/CP95/CP100 structure differs from Swagger percentile fields. |
-| `comprate` | `compRate`, formatted as `$0.00` | Confirm currency/rounding rules. |
-| `riskassessment` | `riskAssessment` | **TODO:** inspect legacy and v1.2 nested fields side by side. |
-| `icdcodes`, `procsummary`, `cfactors`, `alertdesc` | correspondingly named v1.2 fields | Confirm every nested field and casing. |
-| `fnolcodes` | `fnolCodes` | Confirm output nesting/type. |
-| `notes` | `notes` | Reserve only; confirm schema. |
-| `odgurl`, `deeplinkurl` | no Swagger v1.2 response field | **TODO:** retain PHP-equivalent URL construction in Express or obtain an approved replacement; cannot be derived from the new API response. |
+| `clientid` | `clientId` | Confirmed. |
+| `adjustedsummaryguidelines` | `adjustedSummaryGuidelines` | **Resolved.** Comorbidity only — omitted for Reserve. |
+| `adjustedduration.bp/cp95/cp100` | `adjustedDuration.bestPractice/claimAverage/claimMax` | **Resolved.** `clinicalMin` is omitted. Comorbidity: omitted when `medicalonly` set. Reserve: only returned when `fulloutput=Y`. |
+| `projectedcosts.bp/cp95/cp100` | `projectedCosts.bestPractice/claimAverage/claimMax` | **Resolved.** Reserve only. Each tier has `indemnity`, `medical`, `expense`, `total` — all formatted as US currency (`$N,NNN.NN`). |
+| `comprate` | `compRate` | **Resolved.** Formatted as `$N,NNN.NN`. |
+| `riskassessment.score/status/magnitude/volatility` | `riskAssessment.score/status/magnitude/volatility` | **Resolved.** `ssdiFlag` omitted. `magnitude` and `volatility` formatted to 2 decimal places. |
+| `icdcodes` (fulloutput only) | `icdCodes.icdcode[]` | **Resolved.** Items: `code`, `name`, `stcode` (from ODG), `meandurationdays.{bp,cp95,cp100}`. Two sub-cases: (1) mixed ICD+FNOL request — only explicitly submitted ICD codes appear; FNOL-resolved ICDs are excluded; (2) FNOL-only request (no explicit ICD codes) — `icdcodes` field is omitted entirely from the response even when `fulloutput=Y`. |
+| `fnolcodes` (fulloutput only) | `fnolCodes` | **Resolved.** `icdcodes` sub-field stripped from each FNOL item (legacy never returns it). |
+| `procsummary` (fulloutput only) | `procsummary.{cptcodes,icdcodes}` | **Resolved.** CPT items with `meandurationdays=0` filtered out. ICD proc `meandurationdays` formatted to 3dp. |
+| `cfactors` (fulloutput only) | `cfactors` | **Resolved.** Entries with `applied=0` are filtered. `preExisting` → `preexisting` in legacy output. `alert` values lowercased. Surgery trigger: codes without a decimal point are CPT (preferred group); codes with a decimal point are ICD procedure (fallback group); only the last code in the preferred group is returned as the trigger. |
+| `alertdesc` (fulloutput only) | `alertdesc` | Passed through as-is. |
+| `notes` | `notes` | Reserve only. `bestPractice→bp`, `claimAverage→cp95`, `claimMax→cp100` renamed throughout. |
+| `odgurl`, `deeplinkurl` | `odgByMcgLinks.duration` | **Resolved.** Both fields map to the same value: `odgByMcgLinks.duration`. When absent, both are `null`. |
+
+### Response serialization rules — confirmed
+
+These cross-cutting rules apply to all legacy output (both XML and JSON) and must be preserved by any reimplementation:
+
+| Rule | Detail |
+|---|---|
+| Key casing | All output keys are deep-lowercased. Exception: `primaryRTWpath` preserves its mixed case exactly — it must never be lowercased. |
+| Null values | `null` values serialize as empty strings (`""`). Never emit the literal string `"null"` or a JSON `null`. |
+| Undefined fields | Fields set to `undefined` are stripped entirely — not emitted as empty or null. |
+| Upstream array params | Multi-value query params sent to ODG API v1.2 use repeated-key format without brackets: `icd10=A&icd10=B` not `icd10[]=A&icd10[]=B`. |
 
 ## End-of-life endpoints
 
