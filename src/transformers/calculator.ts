@@ -283,7 +283,7 @@ export function mapCalcResponse(
       ? formatFixedFields(omitKeys(data.riskAssessment, ['ssdiFlag']), ['magnitude', 'volatility'], 2)
       : undefined,
     // TODO/confirm: adjustedduration BP/CP95/CP100 vs v1.2 percentiles
-    adjustedduration: (service === 'comorbidity' && input.medicalonly) || !data.adjustedDuration
+    adjustedduration: (service === 'comorbidity' && input.medicalonly) || (service === 'reserve' && !input.fulloutput) || !data.adjustedDuration
       ? undefined
       : renameKeys(omitKeys(data.adjustedDuration, ['clinicalMin']), {
           bestPractice: 'bp',
