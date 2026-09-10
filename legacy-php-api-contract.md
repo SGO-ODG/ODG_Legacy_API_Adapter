@@ -286,7 +286,17 @@ Shared behavior:
 Notes on conditional fields:
 - `icdcodes`, `fnolcodes`, `procsummary`, `cfactors`, `alertdesc` only appear when `fulloutput=Y`
 - Procsummary CPT items with `meandurationdays=0` are filtered. ICD proc `meandurationdays` is formatted to 3 decimal places (e.g. `24.300`)
-- `cfactors` surgery trigger: CPT code preferred over ICD procedure code when multiple triggers exist; only the last trigger in the preferred group is returned
+- `cfactors` surgery trigger: CPT code preferred over ICD procedure code when multiple triggers exist; only the last trigger in the preferred group is returned. CPT codes are identified by the absence of a decimal point in the code value; ICD procedure codes have a decimal point.
+- `icdcodes` FNOL deduplication: when the request contains both explicit ICD codes and FNOL codes, only the explicitly submitted ICD codes appear in `icdcodes` (FNOL-resolved ICDs are excluded). When the request is FNOL-only (no explicit ICD codes provided), `icdcodes` is omitted entirely from the response even when `fulloutput=Y`.
+
+### Response serialization rules
+
+These rules apply to both XML and JSON output and must be preserved by any reimplementation:
+
+- **Key casing**: All response keys are deep-lowercased. Exception: `primaryRTWpath` preserves its mixed case and must never be lowercased.
+- **Null values**: `null` field values are serialized as empty strings (`""`). They are never emitted as the literal string `"null"` or as a JSON `null`.
+- **Undefined fields**: Fields with value `undefined` are stripped from the output entirely (not emitted as empty or null).
+- **Upstream array query params**: Sent in repeated-key format without brackets — `icd10=A&icd10=B`, not `icd10[]=A&icd10[]=B`. This applies to all multi-value params sent to ODG API v1.2.
 
 ## Source limitations
 

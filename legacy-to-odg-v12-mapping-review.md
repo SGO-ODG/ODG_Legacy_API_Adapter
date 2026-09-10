@@ -527,13 +527,24 @@ Unknown `section` values are silently skipped.
 | `projectedcosts.bp/cp95/cp100` | `projectedCosts.bestPractice/claimAverage/claimMax` | **Resolved.** Reserve only. Each tier has `indemnity`, `medical`, `expense`, `total` — all formatted as US currency (`$N,NNN.NN`). |
 | `comprate` | `compRate` | **Resolved.** Formatted as `$N,NNN.NN`. |
 | `riskassessment.score/status/magnitude/volatility` | `riskAssessment.score/status/magnitude/volatility` | **Resolved.** `ssdiFlag` omitted. `magnitude` and `volatility` formatted to 2 decimal places. |
-| `icdcodes` (fulloutput only) | `icdCodes.icdcode[]` | **Resolved.** Items: `code`, `name`, `stcode` (from ODG), `meandurationdays.{bp,cp95,cp100}`. When FNOL-only input, `icdcodes` is omitted entirely. When mixed ICD+FNOL, only explicitly submitted ICD codes appear. |
+| `icdcodes` (fulloutput only) | `icdCodes.icdcode[]` | **Resolved.** Items: `code`, `name`, `stcode` (from ODG), `meandurationdays.{bp,cp95,cp100}`. Two sub-cases: (1) mixed ICD+FNOL request — only explicitly submitted ICD codes appear; FNOL-resolved ICDs are excluded; (2) FNOL-only request (no explicit ICD codes) — `icdcodes` field is omitted entirely from the response even when `fulloutput=Y`. |
 | `fnolcodes` (fulloutput only) | `fnolCodes` | **Resolved.** `icdcodes` sub-field stripped from each FNOL item (legacy never returns it). |
 | `procsummary` (fulloutput only) | `procsummary.{cptcodes,icdcodes}` | **Resolved.** CPT items with `meandurationdays=0` filtered out. ICD proc `meandurationdays` formatted to 3dp. |
-| `cfactors` (fulloutput only) | `cfactors` | **Resolved.** Entries with `applied=0` are filtered. `preExisting` → `preexisting` in legacy output. `alert` values lowercased. Surgery trigger: last CPT code preferred; falls back to last ICD proc code. |
+| `cfactors` (fulloutput only) | `cfactors` | **Resolved.** Entries with `applied=0` are filtered. `preExisting` → `preexisting` in legacy output. `alert` values lowercased. Surgery trigger: codes without a decimal point are CPT (preferred group); codes with a decimal point are ICD procedure (fallback group); only the last code in the preferred group is returned as the trigger. |
 | `alertdesc` (fulloutput only) | `alertdesc` | Passed through as-is. |
 | `notes` | `notes` | Reserve only. `bestPractice→bp`, `claimAverage→cp95`, `claimMax→cp100` renamed throughout. |
 | `odgurl`, `deeplinkurl` | `odgByMcgLinks.duration` | **Resolved.** Both fields map to the same value: `odgByMcgLinks.duration`. When absent, both are `null`. |
+
+### Response serialization rules — confirmed
+
+These cross-cutting rules apply to all legacy output (both XML and JSON) and must be preserved by any reimplementation:
+
+| Rule | Detail |
+|---|---|
+| Key casing | All output keys are deep-lowercased. Exception: `primaryRTWpath` preserves its mixed case exactly — it must never be lowercased. |
+| Null values | `null` values serialize as empty strings (`""`). Never emit the literal string `"null"` or a JSON `null`. |
+| Undefined fields | Fields set to `undefined` are stripped entirely — not emitted as empty or null. |
+| Upstream array params | Multi-value query params sent to ODG API v1.2 use repeated-key format without brackets: `icd10=A&icd10=B` not `icd10[]=A&icd10[]=B`. |
 
 ## End-of-life endpoints
 
