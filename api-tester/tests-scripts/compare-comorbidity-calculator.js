@@ -58,6 +58,9 @@ const ADAPTER_BASE    = (process.env.ADAPTER_API_BASE_URL || '').replace(/\/$/, 
 const API_KEY         = process.env.COMPARE_API_KEY || '';
 const SKIP_URLS       = (process.env.CALC_SKIP_URL_COMPARE || '').toUpperCase() === 'Y';
 
+const NAME_COMPARE_RAW = parseInt(process.env.CALC_NAME_COMPARE_LENGTH || '', 10);
+const NAME_COMPARE_LEN = isNaN(NAME_COMPARE_RAW) || NAME_COMPARE_RAW <= 0 ? null : NAME_COMPARE_RAW;
+
 const missing = [
   !LEGACY_BASE  && 'LEGACY_API_BASE_URL',
   !ADAPTER_BASE && 'ADAPTER_API_BASE_URL',
@@ -385,10 +388,20 @@ function compareContent(legacyVal, adapterVal, path, diffs) {
       compareContent(legacyVal[idx], adapterVal[idx], `${path}[${idx}]`, diffs);
     }
   } else {
-    // Leaf: compare as strings
+    // Leaf: compare as strings; skip if the only difference is case.
+    // For 'name' fields, compare only the first NAME_COMPARE_LEN characters (if set).
     const lStr = String(legacyVal  ?? '');
     const aStr = String(adapterVal ?? '');
-    if (lStr !== aStr) {
+    const lastSegment = (path || '').split('.').pop().replace(/\[.*?\]$/, '');
+    let mismatch;
+    if (lastSegment === 'name' && NAME_COMPARE_LEN !== null) {
+      const lCmp = lStr.slice(0, NAME_COMPARE_LEN).toLowerCase();
+      const aCmp = aStr.slice(0, NAME_COMPARE_LEN).toLowerCase();
+      mismatch = lCmp !== aCmp;
+    } else {
+      mismatch = lStr !== aStr && lStr.toLowerCase() !== aStr.toLowerCase();
+    }
+    if (mismatch) {
       diffs.push({ path: path || '(root)', legacyValue: lStr, adapterValue: aStr });
     }
   }
@@ -652,8 +665,9 @@ async function main() {
   console.log(`  API Key: ${maskedKey}`);
   console.log(`  Input:   ${inputFile}`);
   console.log(`  Output:  ${outputFile}`);
-  if (DEBUG)      console.log(`  Mode:         DEBUG (raw responses printed)`);
-  if (SKIP_URLS)  console.log(`  URL compare:  DISABLED for odgurl and deeplinkurl fields (CALC_SKIP_URL_COMPARE=Y)`);
+  if (DEBUG)             console.log(`  Mode:         DEBUG (raw responses printed)`);
+  if (SKIP_URLS)         console.log(`  URL compare:  DISABLED for odgurl and deeplinkurl fields (CALC_SKIP_URL_COMPARE=Y)`);
+  if (NAME_COMPARE_LEN)  console.log(`  Name compare: first ${NAME_COMPARE_LEN} characters only (CALC_NAME_COMPARE_LENGTH=${NAME_COMPARE_LEN})`);
   console.log();
 
   if (!fs.existsSync(inputFile)) {
