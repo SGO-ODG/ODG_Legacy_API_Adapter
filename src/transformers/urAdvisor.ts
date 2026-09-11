@@ -4,7 +4,7 @@ import { SubscriptionRow } from '../db/companywebservice';
 import { odgGet, UpstreamError } from '../upstream/odgClient';
 import { OdgTaoResponse, OdgTaoProcedure, OdgTaoItemGroup, OdgTaoProceduresResponse, OdgTaoFnolResponse } from '../types/odg';
 import { LegacyCptRecord, LegacyIcdRecord, LegacyUraRecord } from '../types/legacy';
-import { tildeList, padFnol } from '../parsers/queryParams';
+import { tildeList, padFnol, normalizeIcdCode } from '../parsers/queryParams';
 import { LegacyError, ERRORS } from '../errors/legacyErrors';
 
 const uraQuerySchema = z.object({
@@ -67,7 +67,9 @@ export function parseUraParams(
   if (icdRaw === '9' || icdRaw === '10') {
     icdLookupMode = icdRaw as '9' | '10';
   } else {
-    icds = tildeList(icdRaw);
+    // Legacy clients may omit the decimal in ICD codes (e.g. "A4545" → "A45.45").
+    // Normalize each code before forwarding to the ODG API.
+    icds = tildeList(icdRaw).map(normalizeIcdCode);
   }
 
   const cpts = tildeList(cptRaw);

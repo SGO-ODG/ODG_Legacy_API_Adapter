@@ -3,7 +3,7 @@ import { odgPost, UpstreamError } from '../upstream/odgClient';
 import { OdgCalculatorResponse } from '../types/odg';
 import { LegacyCalculatorResponse, LegacyCalcIcdCodeItem, LegacyFormat } from '../types/legacy';
 import { parseXmlBody, xmlStr, xmlStrArray, xmlRootKey } from '../parsers/xmlBody';
-import { padFnol, formatCurrency } from '../parsers/queryParams';
+import { padFnol, formatCurrency, normalizeIcdCode } from '../parsers/queryParams';
 import { LegacyError, ERRORS } from '../errors/legacyErrors';
 
 // ─── Shared XML parsing ───────────────────────────────────────────────────────
@@ -64,7 +64,9 @@ export function parseCalcXml(raw: Buffer | string): CalcXmlInput {
 
   const r = (key: string) => xmlStr(parsed, root, key);
 
-  const icdCodes = deduplicate(xmlStrArray(parsed, root, 'icdcodes', 'code'));
+  // Legacy clients may omit the decimal in ICD codes (e.g. "73556" → "735.56").
+  // Normalize each code before forwarding to the ODG API.
+  const icdCodes = deduplicate(xmlStrArray(parsed, root, 'icdcodes', 'code')).map(normalizeIcdCode);
   const cptCodes = deduplicate(xmlStrArray(parsed, root, 'procsummary', 'cpt', 'code'));
   const hcpcsCodes = deduplicate(xmlStrArray(parsed, root, 'procsummary', 'hcpcs', 'code'));
   const procIcdCodes = deduplicate(xmlStrArray(parsed, root, 'procsummary', 'icd', 'code'));

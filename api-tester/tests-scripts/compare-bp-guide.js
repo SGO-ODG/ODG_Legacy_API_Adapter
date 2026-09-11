@@ -284,9 +284,80 @@ function compareContent(legacyVal, adapterVal, path, diffs) {
         type,
       });
     }
-    const maxLen = Math.max(legacyVal.length, adapterVal.length);
-    for (let i = 0; i < maxLen; i++) {
-      compareContent(legacyVal[i], adapterVal[i], `${path}[${i}]`, diffs);
+
+    // For object/array element arrays, use set-based matching by canonical key.
+    // Index-based comparison misaligns when adapter has extra items interspersed
+    // (e.g. activitymod with an extra "Modified work" entry sorts between existing items).
+    const firstElem = legacyVal[0] ?? adapterVal[0];
+    if (firstElem !== null && firstElem !== undefined && typeof firstElem === 'object') {
+      const usedAdapterIdx = new Set();
+      for (let i = 0; i < legacyVal.length; i++) {
+        const legKey = canonicalKey(legacyVal[i]);
+        let matchIdx = -1;
+        for (let j = 0; j < adapterVal.length; j++) {
+          if (!usedAdapterIdx.has(j) && canonicalKey(adapterVal[j]) === legKey) {
+            matchIdx = j; break;
+          }
+        }
+        if (matchIdx >= 0) {
+          usedAdapterIdx.add(matchIdx);
+          // Exact canonical match — no diffs needed for this element
+        } else {
+          // No exact canonical match. Try a partial match by well-known label fields
+          // (primaryRTWpath for bp, primarypath for pt/chiro, jobtype for activitymod)
+          // so that field-level differences are shown rather than adapter="".
+          const LABEL_KEYS = ['primaryRTWpath', 'primarypath', 'jobtype'];
+          const labelKey = LABEL_KEYS.find(k =>
+            Object.prototype.hasOwnProperty.call(legacyVal[i], k)
+          );
+          if (labelKey) {
+            const legLabel = String(legacyVal[i][labelKey] ?? '');
+            let partialIdx = -1;
+            for (let j = 0; j < adapterVal.length; j++) {
+              if (!usedAdapterIdx.has(j) &&
+                  String(adapterVal[j]?.[labelKey] ?? '') === legLabel) {
+                partialIdx = j; break;
+              }
+            }
+            if (partialIdx >= 0) {
+              usedAdapterIdx.add(partialIdx);
+              // Partial label match — recurse to show actual field-level differences
+              compareContent(legacyVal[i], adapterVal[partialIdx], `${path || '(root)'}[${i}]`, diffs);
+            } else {
+              // No match at all — adapter is truly missing this item
+              diffs.push({
+                path:         `${path || '(root)'}[${i}]`,
+                legacyValue:  truncate(JSON.stringify(legacyVal[i])),
+                adapterValue: '',
+              });
+            }
+          } else {
+            // No known label key — report as missing
+            diffs.push({
+              path:         `${path || '(root)'}[${i}]`,
+              legacyValue:  truncate(JSON.stringify(legacyVal[i])),
+              adapterValue: '',
+            });
+          }
+        }
+      }
+      // Extra adapter items (not matched to any legacy item) → EXPECTED_DIFF
+      for (let j = 0; j < adapterVal.length; j++) {
+        if (!usedAdapterIdx.has(j)) {
+          diffs.push({
+            path:         `${path || '(root)'}[${j}]`,
+            legacyValue:  '',
+            adapterValue: truncate(JSON.stringify(adapterVal[j])),
+            type:         'EXPECTED_DIFF',
+          });
+        }
+      }
+    } else {
+      // Primitive arrays: index-based comparison
+      const maxLen = Math.max(legacyVal.length, adapterVal.length);
+      for (let i = 0; i < maxLen; i++) {
+        compareContent(legacyVal[i], adapterVal[i], `${path}[${i}]`, diffs);
+      }
     }
   } else {
     // Leaf: compare as strings to handle number/string coercion uniformly
@@ -343,22 +414,86 @@ function extractRootItems(parsed) {
   return [];
 }
 
-// Pair legacy items with adapter items by ICD prefix.
+// Returns progressively shorter ICD strings to try as fallback candidates,
+// stripping one character at a time from the right down to the root prefix.
+// E.g. "M79.664" → ["M79.66", "M79.6", "M79"]
+//      "724.2"   → ["724"]
+//      "M79"     → []
+function icdTrimCandidates(code) {
+  const s = String(code ?? '').toUpperCase();
+  const dotIdx = s.indexOf('.');
+  const root = dotIdx >= 0 ? s.slice(0, dotIdx) : s;
+  const candidates = [];
+  let current = s;
+  while (true) {
+    current = current.slice(0, -1);
+    if (current.endsWith('.')) current = current.slice(0, -1);
+    if (current.length < root.length) break;
+    candidates.push(current);
+    if (current === root) break;
+  }
+  return candidates;
+}
+
+// Pair legacy items with adapter items.
+// Pass 1: exact full icdcode match (case-insensitive).
+// Pass 2: for unmatched legacy items, progressively trim one char at a time
+//         from the right (e.g. M79.664 → M79.66 → M79.6 → M79) until a
+//         match is found among remaining adapter items.
 // Returns [{ legacy, adapter }] — adapter-only items have legacy=null.
 function matchByIcd(legacyItems, adapterItems) {
   const pairs = [];
   const usedAdapter = new Set();
+  const unmatchedLegacy = [];
 
+  // Pass 1: exact full icdcode match
   for (const legItem of legacyItems) {
-    const legPrefix = getIcdPrefix(legItem && legItem.icdcode);
+    const legCode = String((legItem && legItem.icdcode) ?? '').toUpperCase();
     let bestIdx = -1;
-    if (legPrefix) {
+    if (legCode) {
       for (let i = 0; i < adapterItems.length; i++) {
         if (usedAdapter.has(i)) continue;
-        const adpPrefix = getIcdPrefix(adapterItems[i] && adapterItems[i].icdcode);
-        if (adpPrefix === legPrefix) { bestIdx = i; break; }
+        if (String((adapterItems[i] && adapterItems[i].icdcode) ?? '').toUpperCase() === legCode) {
+          bestIdx = i; break;
+        }
       }
     }
+    if (bestIdx >= 0) {
+      usedAdapter.add(bestIdx);
+      pairs.push({ legacy: legItem, adapter: adapterItems[bestIdx] });
+    } else {
+      unmatchedLegacy.push(legItem);
+    }
+  }
+
+  // Pass 2: progressive-trim fallback for unmatched legacy items
+  for (const legItem of unmatchedLegacy) {
+    const legCode = String((legItem && legItem.icdcode) ?? '').toUpperCase();
+    const candidates = icdTrimCandidates(legCode);
+    let bestIdx = -1;
+
+    for (const candidate of candidates) {
+      const hasDot = candidate.includes('.');
+      for (let i = 0; i < adapterItems.length; i++) {
+        if (usedAdapter.has(i)) continue;
+        const adpCode = String((adapterItems[i] && adapterItems[i].icdcode) ?? '').toUpperCase();
+        const matches = adpCode === candidate ||
+          (hasDot ? adpCode.startsWith(candidate) : adpCode.startsWith(candidate + '.'));
+        if (matches) { bestIdx = i; break; }
+      }
+      if (bestIdx >= 0) break;
+    }
+
+    // Forward-prefix: legacy code is a prefix of the adapter code
+    // e.g. legacy "C15" matches adapter "C15.0" (legacy truncates to root)
+    if (bestIdx < 0 && legCode) {
+      for (let i = 0; i < adapterItems.length; i++) {
+        if (usedAdapter.has(i)) continue;
+        const adpCode = String((adapterItems[i] && adapterItems[i].icdcode) ?? '').toUpperCase();
+        if (adpCode.startsWith(legCode + '.')) { bestIdx = i; break; }
+      }
+    }
+
     if (bestIdx >= 0) {
       usedAdapter.add(bestIdx);
       pairs.push({ legacy: legItem, adapter: adapterItems[bestIdx] });
@@ -379,13 +514,13 @@ function matchByIcd(legacyItems, adapterItems) {
 // Compare one matched (legacy, adapter) item pair and push diffs.
 // icdcode difference  → EXPECTED_DIFF (prefix matched but full code may differ)
 // name difference     → EXPECTED_DIFF (expected when icd code variant differs)
-// all other fields    → deepNormalize inner arrays then compareContent
+// all other fields    → deepNormalize then compareContent (order-insensitive)
 // adapter-only item   → EXPECTED_DIFF (adapter returned extra record)
 // legacy-only item    → CONTENT_MISMATCH (adapter is missing a record)
 function comparePair(legacy, adapter, diffs) {
-  const legIcdPrefix = getIcdPrefix(legacy  && legacy.icdcode);
-  const adpIcdPrefix = getIcdPrefix(adapter && adapter.icdcode);
-  const icdLabel = legIcdPrefix || adpIcdPrefix || 'unknown';
+  const legIcd = String((legacy  && legacy.icdcode)  ?? '');
+  const adpIcd = String((adapter && adapter.icdcode) ?? '');
+  const icdLabel = legIcd || adpIcd || 'unknown';
   const itemPath = `item[icd=${icdLabel}]`;
 
   if (!legacy && adapter) {
@@ -408,8 +543,6 @@ function comparePair(legacy, adapter, diffs) {
   }
 
   // Both present — compare icdcode and name first, then remaining fields
-  const legIcd  = String(legacy.icdcode  ?? '');
-  const adpIcd  = String(adapter.icdcode ?? '');
   if (legIcd !== adpIcd) {
     diffs.push({ path: `${itemPath}.icdcode`, legacyValue: legIcd, adapterValue: adpIcd, type: 'EXPECTED_DIFF' });
   }
@@ -420,7 +553,8 @@ function comparePair(legacy, adapter, diffs) {
     diffs.push({ path: `${itemPath}.name`, legacyValue: legName, adapterValue: adpName, type: 'EXPECTED_DIFF' });
   }
 
-  // Compare all other fields; deepNormalize handles inner array ordering
+  // Compare all other fields; deepNormalize makes inner array comparison
+  // order-insensitive so ordering differences are never flagged.
   const legRest = Object.assign({}, legacy);
   const adpRest = Object.assign({}, adapter);
   delete legRest.icdcode; delete legRest.name;
@@ -456,7 +590,7 @@ const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
   isArray: () => false,
-  parseTagValue: true,
+  parseTagValue: false,  // keep all values as strings to preserve trailing zeros (e.g. 726.10 not 726.1)
   trimValues: true
 });
 

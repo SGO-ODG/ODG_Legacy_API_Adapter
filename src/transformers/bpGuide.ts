@@ -3,7 +3,7 @@ import { CompanyRow } from '../db/companymaster';
 import { odgGet } from '../upstream/odgClient';
 import { OdgGuidelineRecord } from '../types/odg';
 import { LegacyBpGuideRecord } from '../types/legacy';
-import { tildeList, padFnol } from '../parsers/queryParams';
+import { tildeList, padFnol, normalizeIcdCode } from '../parsers/queryParams';
 import { LegacyError, ERRORS } from '../errors/legacyErrors';
 
 const bpGuideQuerySchema = z.object({
@@ -43,7 +43,9 @@ export function parseBpGuideParams(
   const bp       = p.bp  !== undefined ? padFnol(p.bp)  : undefined;
   const noi      = p.noi !== undefined ? padFnol(p.noi) : undefined;
   const clientid = p.clientid;
-  const icds     = tildeList(p.icd);
+  // Legacy clients may omit the decimal in ICD codes (e.g. "73556" → "735.56").
+  // Normalize each code before forwarding to the ODG API.
+  const icds     = tildeList(p.icd).map(normalizeIcdCode);
 
   if (icds.length === 0 && !(bp && noi)) {
     throw new LegacyError(ERRORS.INVALID_FORMAT());

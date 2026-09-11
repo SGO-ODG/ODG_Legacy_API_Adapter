@@ -1,4 +1,27 @@
 /**
+ * Normalizes a legacy ICD code that may be submitted without a decimal point.
+ *
+ * Legacy clients may omit the decimal separator, e.g. "73556" instead of
+ * "735.56", or "A4545" instead of "A45.45".  The ODG API requires the standard
+ * ICD format with a decimal inserted after the 3rd character.
+ *
+ * Rules:
+ *  - Already contains a decimal  → returned unchanged
+ *  - Length ≤ 3 characters       → returned unchanged (root code, no subtype)
+ *  - Otherwise                   → decimal inserted after position 3
+ *
+ * @example normalizeIcdCode('73556')  → '735.56'
+ * @example normalizeIcdCode('A4545')  → 'A45.45'
+ * @example normalizeIcdCode('735.56') → '735.56'  (unchanged)
+ * @example normalizeIcdCode('M54')    → 'M54'      (unchanged)
+ */
+export function normalizeIcdCode(code: string): string {
+  const trimmed = code.trim();
+  if (trimmed.includes('.') || trimmed.length <= 3) return trimmed;
+  return `${trimmed.slice(0, 3)}.${trimmed.slice(3)}`;
+}
+
+/**
  * Splits a tilde-separated legacy parameter value into an array of trimmed,
  * non-empty strings.
  *
