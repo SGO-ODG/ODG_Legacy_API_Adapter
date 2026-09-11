@@ -630,6 +630,7 @@ async function processRow(row) {
       adapter_type: String(adapterResult.status),
       detail: `Legacy returned HTTP ${legacyResult.status}, adapter returned HTTP ${adapterResult.status}`
     });
+    return results;
   }
 
   // Detect actual response format from Content-Type / body for each side independently

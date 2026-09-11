@@ -708,6 +708,7 @@ async function processRow(row) {
       adapter_value: String(adapterResult.status),
       detail: `Legacy returned HTTP ${legacyResult.status}, adapter returned HTTP ${adapterResult.status}`
     });
+    return results;
   }
 
   // Detect format independently for each side

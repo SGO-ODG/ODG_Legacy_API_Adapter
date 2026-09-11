@@ -250,8 +250,26 @@ function deepNormalize(val) {
   return val;
 }
 
+// Converts a top-level indexed object {"0":A,"1":B,"clientid":"x",...} into
+// {records:[A,B], clientid:"x",...} so compareContent can match records by
+// their code identifier rather than by numeric key position (which varies
+// between legacy and adapter when the same ICD codes are returned in a
+// different order).
+function extractIndexedRecords(parsed) {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return parsed;
+  const keys = Object.keys(parsed);
+  const numericKeys = keys.filter(k => /^\d+$/.test(k));
+  if (numericKeys.length === 0) return parsed;
+  const records = numericKeys.sort((a, b) => +a - +b).map(k => parsed[k]);
+  const out = { records };
+  for (const k of keys) {
+    if (!/^\d+$/.test(k)) out[k] = parsed[k];
+  }
+  return out;
+}
+
 function sortForComparison(parsed) {
-  return deepNormalize(parsed);
+  return deepNormalize(extractIndexedRecords(parsed));
 }
 
 // ---------------------------------------------------------------------------
@@ -577,6 +595,7 @@ async function processRow(row) {
       adapter_value: String(adapterResult.status),
       detail: `Legacy returned HTTP ${legacyResult.status}, adapter returned HTTP ${adapterResult.status}`,
     });
+    return results;
   }
 
   // Detect format independently for each side
