@@ -1,0 +1,1 @@
+node ../compare-bp-guide.js --input "../input/legacy-customer-bp-guide-tests.csv" --output "../output/legacy-customer-bp-guide-results.csv"
