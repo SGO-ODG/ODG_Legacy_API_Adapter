@@ -9,6 +9,11 @@ const parser = new XMLParser({
   parseTagValue: false,
   // Do NOT force isArray on container elements — that wraps them in an extra
   // array and breaks path traversal. xmlStrArray handles both string and array.
+  // Suppress the <?xml version="1.0" encoding="UTF-8"?> declaration so it is
+  // not emitted as a '?xml' key in the parsed output.  Without this, customer
+  // clients that include the declaration cause xmlRootKey() to return '?xml'
+  // instead of the actual root element, breaking all XML POST endpoints.
+  ignoreDeclaration: true,
 });
 
 /**
@@ -43,7 +48,9 @@ export function parseXmlBody(raw: Buffer | string): Record<string, unknown> {
  * <cbcalc>, <reservecalc>, <onesearch>) without hardcoding it.
  */
 export function xmlRootKey(parsed: Record<string, unknown>): string {
-  return Object.keys(parsed)[0] ?? '';
+  // Skip processing-instruction keys (e.g. '?xml') that fast-xml-parser may
+  // emit even with ignoreDeclaration:true for other PI nodes.
+  return Object.keys(parsed).find(k => !k.startsWith('?')) ?? '';
 }
 
 /**

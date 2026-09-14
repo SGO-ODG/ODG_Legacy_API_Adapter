@@ -1,4 +1,4 @@
-import { parseXmlBody, xmlStr, xmlStrArray } from '../../../src/parsers/xmlBody';
+import { parseXmlBody, xmlRootKey, xmlStr, xmlStrArray } from '../../../src/parsers/xmlBody';
 import { LegacyError } from '../../../src/errors/legacyErrors';
 
 describe('parseXmlBody', () => {
@@ -6,6 +6,21 @@ describe('parseXmlBody', () => {
     const xml = '<request><text>back pain</text></request>';
     const result = parseXmlBody(xml);
     expect(result).toHaveProperty('request');
+  });
+
+  it('parses XML with <?xml version="1.0" encoding="UTF-8"?> declaration', () => {
+    const xml = '<?xml version="1.0" encoding="UTF-8"?><onsearch><text>pain</text></onsearch>';
+    const result = parseXmlBody(xml);
+    // Declaration must not appear as a key; root element must be the only key
+    expect(xmlRootKey(result)).toBe('onsearch');
+    expect(xmlStr(result, 'onsearch', 'text')).toBe('pain');
+  });
+
+  it('parses XML with <?xml version="1.0"?> declaration (no encoding)', () => {
+    const xml = '<?xml version="1.0"?><onesearch><text>C2</text></onesearch>';
+    const result = parseXmlBody(xml);
+    expect(xmlRootKey(result)).toBe('onesearch');
+    expect(xmlStr(result, 'onesearch', 'text')).toBe('C2');
   });
 
   it('throws LegacyError for invalid XML', () => {
