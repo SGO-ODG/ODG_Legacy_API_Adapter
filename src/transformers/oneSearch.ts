@@ -49,10 +49,12 @@ export function parseOneSearchBody(raw: Buffer | string): OneSearchContext {
   const root = xmlRootKey(parsed);
 
   const text = xmlStr(parsed, root, 'text');
-  if (!text || text.trim() === '') {
+  if (text === undefined) {
+    // <text> element is entirely absent from the XML body
     throw new LegacyError(ERRORS.MISSING_XML_ELEMENTS());
   }
   if (text.trim().length < 2) {
+    // <text> is present but has fewer than 2 non-whitespace characters (includes empty)
     throw new LegacyError(ERRORS.SEARCH_TEXT_TOO_SHORT());
   }
 

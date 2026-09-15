@@ -99,6 +99,17 @@ describe('One Search request validation', () => {
     expect(res.text).toMatch(/XML element/);
   });
 
+  it('returns 404 with short-text message when text element is empty', async () => {
+    const xml = '<request><text></text><database><icd9>Y</icd9></database></request>';
+    const res = await request(app)
+      .post('/restws/onesearch')
+      .set('X-ODG-KEY', 'valid-key')
+      .type('application/xml')
+      .send(xml);
+    expect(res.status).toBe(404);
+    expect(res.text).toMatch(/Minimum 2 characters/);
+  });
+
   it('returns 404 when text is too short (1 char)', async () => {
     const xml = '<request><text>a</text><database><icd9>Y</icd9></database></request>';
     const res = await request(app)
