@@ -61,6 +61,9 @@ const SKIP_URLS       = (process.env.CALC_SKIP_URL_COMPARE || '').toUpperCase() 
 const NAME_COMPARE_RAW = parseInt(process.env.CALC_NAME_COMPARE_LENGTH || '', 10);
 const NAME_COMPARE_LEN = isNaN(NAME_COMPARE_RAW) || NAME_COMPARE_RAW <= 0 ? null : NAME_COMPARE_RAW;
 
+const VARIANCE_THRESHOLD_RAW = parseFloat(process.env.CALC_VARIANCE_THRESHOLD || '');
+const VARIANCE_THRESHOLD = isNaN(VARIANCE_THRESHOLD_RAW) || VARIANCE_THRESHOLD_RAW < 0 ? null : VARIANCE_THRESHOLD_RAW;
+
 const missing = [
   !LEGACY_BASE  && 'LEGACY_API_BASE_URL',
   !ADAPTER_BASE && 'ADAPTER_API_BASE_URL',
@@ -324,6 +327,39 @@ function isUrlField(path) {
   // Match the last segment of the dotted path, e.g. "root.odgurl" → "odgurl"
   const last = (path || '').split('.').pop().replace(/\[.*?\]$/, '');
   return URL_FIELDS.has(last);
+}
+
+// ---------------------------------------------------------------------------
+// Variance threshold check
+//
+// Returns true when a numeric diff on a threshold-eligible path falls within
+// CALC_VARIANCE_THRESHOLD.  Eligible paths (XML prefix "root." and JSON
+// unprefixed form are both matched):
+//   - riskassessment.score
+//   - adjustedduration.<tier>.days  (bp / cp95 / cp100)
+//   - adjustedsummaryguidelines.<any child path>
+// ---------------------------------------------------------------------------
+
+const THRESHOLD_SCORE_PATHS = new Set([
+  'root.riskassessment.score',
+  'riskassessment.score',
+]);
+
+function isWithinThreshold(path, legacyValue, adapterValue) {
+  if (VARIANCE_THRESHOLD === null) return false;
+
+  const eligible =
+    THRESHOLD_SCORE_PATHS.has(path) ||
+    /^(root\.)?adjustedduration\.[^.]+\.days$/.test(path) ||
+    /^(root\.)?adjustedsummaryguidelines\..+/.test(path);
+
+  if (!eligible) return false;
+
+  const lNum = parseFloat(legacyValue);
+  const aNum = parseFloat(adapterValue);
+  if (isNaN(lNum) || isNaN(aNum)) return false;
+
+  return Math.abs(lNum - aNum) <= VARIANCE_THRESHOLD;
 }
 
 // ---------------------------------------------------------------------------
@@ -604,6 +640,8 @@ async function processRow(row) {
       discrepancy_type = 'EMPTY_VS_RESULTS';
     } else if (isExpectedDiff(diff.path, diff.legacyValue, diff.adapterValue, diffContext)) {
       discrepancy_type = 'EXPECTED_DIFF';
+    } else if (isWithinThreshold(diff.path, diff.legacyValue, diff.adapterValue)) {
+      discrepancy_type = 'WITHIN_THRESHOLD';
     } else {
       discrepancy_type = 'CONTENT_MISMATCH';
     }
@@ -616,6 +654,9 @@ async function processRow(row) {
     const alertdescDetail = !fnolDetail && !procSummaryDetail && discrepancy_type === 'EXPECTED_DIFF' && /^(root\.)?alertdesc(\..+)?$/.test(diff.path)
       ? `Expected diff (alertdesc): legacy returns alertdesc field that adapter does not yet surface — legacy="${truncate(diff.legacyValue, 80)}" adapter omits`
       : null;
+    const thresholdDetail = discrepancy_type === 'WITHIN_THRESHOLD'
+      ? `Within threshold (diff=${Math.abs(parseFloat(diff.legacyValue) - parseFloat(diff.adapterValue)).toFixed(4)}, threshold=±${VARIANCE_THRESHOLD}): legacy="${diff.legacyValue}" adapter="${diff.adapterValue}"`
+      : null;
     const detail = diff.emptyVsResults
       ? `One side returned no items at "${diff.path}": legacy="${diff.legacyValue}" adapter="${diff.adapterValue}"`
       : fnolDetail
@@ -624,6 +665,8 @@ async function processRow(row) {
       ? procSummaryDetail
       : alertdescDetail
       ? alertdescDetail
+      : thresholdDetail
+      ? thresholdDetail
       : discrepancy_type === 'EXPECTED_DIFF'
       ? `Expected non-breaking diff at "${diff.path}": legacy="${diff.legacyValue}" adapter omits this field (not yet implemented)`
       : `Value differs at "${diff.path}": legacy="${truncate(diff.legacyValue, 80)}" adapter="${truncate(diff.adapterValue, 80)}"`;
@@ -666,9 +709,10 @@ async function main() {
   console.log(`  API Key: ${maskedKey}`);
   console.log(`  Input:   ${inputFile}`);
   console.log(`  Output:  ${outputFile}`);
-  if (DEBUG)             console.log(`  Mode:         DEBUG (raw responses printed)`);
-  if (SKIP_URLS)         console.log(`  URL compare:  DISABLED for odgurl and deeplinkurl fields (CALC_SKIP_URL_COMPARE=Y)`);
-  if (NAME_COMPARE_LEN)  console.log(`  Name compare: first ${NAME_COMPARE_LEN} characters only (CALC_NAME_COMPARE_LENGTH=${NAME_COMPARE_LEN})`);
+  if (DEBUG)                    console.log(`  Mode:              DEBUG (raw responses printed)`);
+  if (SKIP_URLS)                console.log(`  URL compare:       DISABLED for odgurl and deeplinkurl fields (CALC_SKIP_URL_COMPARE=Y)`);
+  if (NAME_COMPARE_LEN)         console.log(`  Name compare:      first ${NAME_COMPARE_LEN} characters only (CALC_NAME_COMPARE_LENGTH=${NAME_COMPARE_LEN})`);
+  if (VARIANCE_THRESHOLD !== null) console.log(`  Variance threshold: ±${VARIANCE_THRESHOLD} for riskassessment.score, adjustedduration days, and adjustedsummaryguidelines values (CALC_VARIANCE_THRESHOLD=${VARIANCE_THRESHOLD})`);
   console.log();
 
   if (!fs.existsSync(inputFile)) {
@@ -702,14 +746,19 @@ async function main() {
 
     const resultRows = await processRow(row);
 
-    const statusTag      = `[L:${resultRows[0].http_status_legacy} A:${resultRows[0].http_status_adapter}]`;
-    const failingRows    = resultRows.filter(r => r.discrepancy_type !== 'PASS' && r.discrepancy_type !== 'EXPECTED_DIFF');
-    const expectedDiffs  = resultRows.filter(r => r.discrepancy_type === 'EXPECTED_DIFF');
-    const passed         = failingRows.length === 0;
+    const statusTag         = `[L:${resultRows[0].http_status_legacy} A:${resultRows[0].http_status_adapter}]`;
+    const failingRows       = resultRows.filter(r => r.discrepancy_type !== 'PASS' && r.discrepancy_type !== 'EXPECTED_DIFF' && r.discrepancy_type !== 'WITHIN_THRESHOLD');
+    const expectedDiffs     = resultRows.filter(r => r.discrepancy_type === 'EXPECTED_DIFF');
+    const withinThresholds  = resultRows.filter(r => r.discrepancy_type === 'WITHIN_THRESHOLD');
+    const passed            = failingRows.length === 0;
 
     if (passed) {
       totalPasses++;
-      const note = expectedDiffs.length > 0 ? ` (${expectedDiffs.length} expected diff(s): EXPECTED_DIFF)` : '';
+      const noteParts = [
+        expectedDiffs.length    > 0 ? `${expectedDiffs.length} expected diff(s): EXPECTED_DIFF`       : '',
+        withinThresholds.length > 0 ? `${withinThresholds.length} within threshold: WITHIN_THRESHOLD` : '',
+      ].filter(Boolean);
+      const note = noteParts.length > 0 ? ` (${noteParts.join(', ')})` : '';
       process.stdout.write(`PASS ${statusTag}${note}\n`);
     } else {
       totalFails++;

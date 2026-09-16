@@ -50,6 +50,20 @@ export function normalizeNdc(code: string): string {
 }
 
 /**
+ * Formats a procsummary NDC code to `NNNNN-NNNN` format, matching legacy PHP logic.
+ * Step 1: strip all non-digit characters.
+ * Step 2: if the result is exactly 9 or 11 digits, format as NNNNN-NNNN (first 9 digits).
+ * Step 3: otherwise return the stripped digits string as-is.
+ */
+export function formatNdcProcCode(code: string): string {
+  const digits = code.replace(/\D/g, '');
+  if (digits.length === 9 || digits.length === 11) {
+    return `${digits.slice(0, 5)}-${digits.slice(5, 9)}`;
+  }
+  return digits;
+}
+
+/**
  * Returns true if a string consists entirely of digits (after trimming).
  */
 export function isNumeric(val: string): boolean {
