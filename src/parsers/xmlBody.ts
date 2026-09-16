@@ -67,7 +67,7 @@ export function xmlStr(
     if (cur == null || typeof cur !== 'object') return undefined;
     cur = cur[key];
   }
-  if (cur == null) return undefined;
+  if (cur == null || typeof cur === 'object') return undefined;
   return String(cur);
 }
 
@@ -86,8 +86,8 @@ export function xmlStrArray(
     cur = cur[key];
   }
   if (!Array.isArray(cur)) {
-    if (cur != null) return [String(cur)];
+    if (cur != null && typeof cur !== 'object') return [String(cur)];
     return [];
   }
-  return cur.map(String).filter((s: string) => s.trim().length > 0);
+  return cur.filter((item: unknown) => item != null && typeof item !== 'object').map(String).filter((s: string) => s.trim().length > 0);
 }

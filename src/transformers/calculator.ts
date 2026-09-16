@@ -97,11 +97,11 @@ export function parseCalcXml(raw: Buffer | string): CalcXmlInput {
     ];
     for (const f of fields) {
       const v = cfRaw[f];
-      if (v != null) cfactors[f] = parseInt(String(v), 10);
+      if (v != null && typeof v !== 'object') cfactors[f] = parseInt(String(v), 10);
     }
     // preexisting → preExisting
     const pre = cfRaw.preexisting;
-    if (pre != null) cfactors.preExisting = parseInt(String(pre), 10);
+    if (pre != null && typeof pre !== 'object') cfactors.preExisting = parseInt(String(pre), 10);
   }
 
   return {
@@ -285,7 +285,7 @@ export function mapCalcResponse(
       ? formatFixedFields(omitKeys(data.riskAssessment, ['ssdiFlag']), ['magnitude', 'volatility'], 2)
       : undefined,
     // TODO/confirm: adjustedduration BP/CP95/CP100 vs v1.2 percentiles
-    adjustedduration: (service === 'comorbidity' && input.medicalonly) || (service === 'reserve' && !input.fulloutput) || !data.adjustedDuration
+    adjustedduration: (service === 'comorbidity' && (input.medicalonly === '1' || input.medicalonly?.toUpperCase() === 'M')) || (service === 'reserve' && !input.fulloutput) || !data.adjustedDuration
       ? undefined
       : renameKeys(omitKeys(data.adjustedDuration, ['clinicalMin']), {
           bestPractice: 'bp',
