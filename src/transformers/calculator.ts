@@ -3,7 +3,7 @@ import { odgPost, UpstreamError } from '../upstream/odgClient';
 import { OdgCalculatorResponse } from '../types/odg';
 import { LegacyCalculatorResponse, LegacyCalcIcdCodeItem, LegacyFormat } from '../types/legacy';
 import { parseXmlBody, xmlStr, xmlStrArray, xmlRootKey } from '../parsers/xmlBody';
-import { padFnol, formatCurrency, normalizeIcdCode } from '../parsers/queryParams';
+import { padFnol, formatCurrency, normalizeIcdCode, formatNdcProcCode } from '../parsers/queryParams';
 import { LegacyError, ERRORS } from '../errors/legacyErrors';
 
 // ─── Shared XML parsing ───────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ export function parseCalcXml(raw: Buffer | string): CalcXmlInput {
   const cptCodes = deduplicate(xmlStrArray(parsed, root, 'procsummary', 'cpt', 'code'));
   const hcpcsCodes = deduplicate(xmlStrArray(parsed, root, 'procsummary', 'hcpcs', 'code'));
   const procIcdCodes = deduplicate(xmlStrArray(parsed, root, 'procsummary', 'icd', 'code'));
-  const ndcCodes = deduplicate(xmlStrArray(parsed, root, 'procsummary', 'ndc', 'code'));
+  const ndcCodes = deduplicate(xmlStrArray(parsed, root, 'procsummary', 'ndc', 'code')).map(formatNdcProcCode);
 
   const bpRaw = r('bpcode');
   const noiRaw = r('noicode');
