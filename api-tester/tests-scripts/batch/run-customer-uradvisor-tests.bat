@@ -1,1 +1,1 @@
-node ../compare-ur-advisor.js --input "../input/legacy-customer-ur-advisor-tests.csv" --output "../output/legacy-customer-ur-advisor-results.csv"
+node ../compare-uradvisor.js --input "../input/legacy-customer-uradvisor-tests.csv" --output "../output/legacy-customer-uradvisor-results.csv"

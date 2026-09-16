@@ -1,1 +1,1 @@
-node ../compare-one-search.js --input "../input/legacy-customer-onesearch-tests.csv" --output "../output/legacy-customer-onesearch-results.csv"
+node ../compare-onesearch.js --input "../input/legacy-customer-onesearch-tests.csv" --output "../output/legacy-customer-onesearch-results.csv"

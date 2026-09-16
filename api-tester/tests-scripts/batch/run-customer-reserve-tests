@@ -1,0 +1,1 @@
+node ../compare-reserve-calculator.js --input "../input/legacy-customer-reserve-calculator-tests.csv" --output "../output/legacy-customer-reserve-calculator-results.csv"

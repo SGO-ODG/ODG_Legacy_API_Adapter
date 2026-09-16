@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * compare-one-search.js
+ * compare-onesearch.js
  *
  * Reads a CSV of One Search test cases and fires each POST request at both
  * the live legacy API and the new adapter API in parallel. Compares the
@@ -9,11 +9,11 @@
  * NOT actual values) and writes any discrepancies to an output CSV.
  *
  * Usage:
- *   node api-tester/tests-scripts/compare-one-search.js [options]
+ *   node api-tester/tests-scripts/compare-onesearch.js [options]
  *
  * Options:
- *   --input  <path>   Input CSV file (default: ./api-tester/tests-scripts/input/one-search-tests.csv)
- *   --output <path>   Output CSV file (default: ./api-tester/tests-scripts/output/one-search-results-<timestamp>.csv)
+ *   --input  <path>   Input CSV file (default: ./api-tester/tests-scripts/input/onesearch-tests.csv)
+ *   --output <path>   Output CSV file (default: ./api-tester/tests-scripts/output/onesearch-results-<timestamp>.csv)
  *   --debug           Print raw HTTP status and response preview for every call (useful for diagnosing failures)
  *
  * Required .env variables (loaded from project root):
@@ -73,9 +73,9 @@ function getArg(name) {
   return idx !== -1 ? process.argv[idx + 1] : null;
 }
 
-const DEFAULT_INPUT  = path.join(__dirname, 'input', 'one-search-tests.csv');
+const DEFAULT_INPUT  = path.join(__dirname, 'input', 'onesearch-tests.csv');
 const timestamp      = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-const DEFAULT_OUTPUT = path.join(__dirname, 'output', `one-search-results-${timestamp}.csv`);
+const DEFAULT_OUTPUT = path.join(__dirname, 'output', `onesearch-results-${timestamp}.csv`);
 
 const inputFile  = getArg('--input')  || DEFAULT_INPUT;
 const outputFile = getArg('--output') || DEFAULT_OUTPUT;

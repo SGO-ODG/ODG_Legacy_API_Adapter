@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * compare-bp-guide.js
+ * compare-bpguide.js
  *
  * Reads a CSV of Best Practice Guide test cases and fires each GET request at
  * both the live legacy API and the new adapter API in parallel. Compares HTTP
@@ -13,11 +13,11 @@
  * for the same ICD input so both sides must match exactly.
  *
  * Usage:
- *   node api-tester/tests-scripts/compare-bp-guide.js [options]
+ *   node api-tester/tests-scripts/compare-bpguide.js [options]
  *
  * Options:
- *   --input  <path>   Input CSV file (default: ./api-tester/tests-scripts/input/bp-guide-tests.csv)
- *   --output <path>   Output CSV file (default: ./api-tester/tests-scripts/output/bp-guide-results-<timestamp>.csv)
+ *   --input  <path>   Input CSV file (default: ./api-tester/tests-scripts/input/bpguide-tests.csv)
+ *   --output <path>   Output CSV file (default: ./api-tester/tests-scripts/output/bpguide-results-<timestamp>.csv)
  *   --debug           Print raw HTTP status and response preview for every call
  *
  * Input CSV columns:
@@ -78,9 +78,9 @@ function getArg(name) {
   return idx !== -1 ? process.argv[idx + 1] : null;
 }
 
-const DEFAULT_INPUT  = path.join(__dirname, 'input', 'bp-guide-tests.csv');
+const DEFAULT_INPUT  = path.join(__dirname, 'input', 'bpguide-tests.csv');
 const timestamp      = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-const DEFAULT_OUTPUT = path.join(__dirname, 'output', `bp-guide-results-${timestamp}.csv`);
+const DEFAULT_OUTPUT = path.join(__dirname, 'output', `bpguide-results-${timestamp}.csv`);
 
 const inputFile  = getArg('--input')  || DEFAULT_INPUT;
 const outputFile = getArg('--output') || DEFAULT_OUTPUT;

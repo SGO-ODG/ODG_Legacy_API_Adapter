@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * compare-ur-advisor.js
+ * compare-uradvisor.js
  *
  * Reads a CSV of UR Advisor test cases and fires each GET request at both the
  * live legacy PHP API and the new adapter API in parallel. Compares HTTP status
@@ -13,11 +13,11 @@
  * the normalizer sorts them into a canonical order before diffing.
  *
  * Usage:
- *   node api-tester/tests-scripts/compare-ur-advisor.js [options]
+ *   node api-tester/tests-scripts/compare-uradvisor.js [options]
  *
  * Options:
- *   --input  <path>   Input CSV file  (default: ./api-tester/tests-scripts/input/ur-advisor-tests.csv)
- *   --output <path>   Output CSV file (default: ./api-tester/tests-scripts/output/ur-advisor-results-<timestamp>.csv)
+ *   --input  <path>   Input CSV file  (default: ./api-tester/tests-scripts/input/uradvisor-tests.csv)
+ *   --output <path>   Output CSV file (default: ./api-tester/tests-scripts/output/uradvisor-results-<timestamp>.csv)
  *   --debug           Print raw HTTP status and response preview for every call
  *
  * Input CSV columns:
@@ -84,9 +84,9 @@ function getArg(name) {
   return idx !== -1 ? process.argv[idx + 1] : null;
 }
 
-const DEFAULT_INPUT  = path.join(__dirname, 'input', 'ur-advisor-tests.csv');
+const DEFAULT_INPUT  = path.join(__dirname, 'input', 'uradvisor-tests.csv');
 const timestamp      = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-const DEFAULT_OUTPUT = path.join(__dirname, 'output', `ur-advisor-results-${timestamp}.csv`);
+const DEFAULT_OUTPUT = path.join(__dirname, 'output', `uradvisor-results-${timestamp}.csv`);
 
 const inputFile  = getArg('--input')  || DEFAULT_INPUT;
 const outputFile = getArg('--output') || DEFAULT_OUTPUT;
