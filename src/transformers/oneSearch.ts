@@ -63,7 +63,10 @@ export function parseOneSearchBody(raw: Buffer | string): OneSearchContext {
   const database = db?.database as Record<string, unknown> | undefined;
 
   if (!database) {
-    throw new LegacyError(ERRORS.MISSING_XML_ELEMENTS());
+    throw new LegacyError({
+      status: 404,
+      body: { error: 'One or more database element child (search in) required to process your request.' },
+    });
   }
 
   const icd9 = String(database.icd9 ?? '') === 'Y';
