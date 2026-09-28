@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ODG Legacy API Adapter — Overview</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #172B4D;
+      max-width: 960px;
+      margin: 40px auto;
+      padding: 0 24px;
+      line-height: 1.6;
+    }
+    h1 { font-size: 28px; border-bottom: 2px solid #DFE1E6; padding-bottom: 8px; margin-top: 32px; }
+    h2 { font-size: 22px; border-bottom: 1px solid #DFE1E6; padding-bottom: 6px; margin-top: 36px; color: #0052CC; }
+    h3 { font-size: 17px; margin-top: 24px; color: #253858; }
+    p  { margin: 10px 0; }
+    ul, ol { margin: 10px 0 10px 24px; }
+    li { margin: 4px 0; }
+    code {
+      background: #F4F5F7;
+      border: 1px solid #DFE1E6;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: "Courier New", monospace;
+      font-size: 13px;
+    }
+    pre {
+      background: #F4F5F7;
+      border: 1px solid #DFE1E6;
+      border-radius: 4px;
+      padding: 14px 16px;
+      font-family: "Courier New", monospace;
+      font-size: 13px;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 14px 0;
+    }
+    th {
+      background: #0052CC;
+      color: #fff;
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+    td {
+      border: 1px solid #DFE1E6;
+      padding: 7px 12px;
+      font-size: 13px;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #F4F5F7; }
+    .note {
+      background: #DEEBFF;
+      border-left: 4px solid #0052CC;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .tag {
+      display: inline-block;
+      background: #E3FCEF;
+      border: 1px solid #57D9A3;
+      color: #006644;
+      border-radius: 3px;
+      padding: 1px 7px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-right: 4px;
+    }
+    .tag-post { background: #FFEBE6; border-color: #FF5630; color: #BF2600; }
+    hr { border: none; border-top: 1px solid #DFE1E6; margin: 32px 0; }
+    .endpoint-header {
+      background: #F4F5F7;
+      border: 1px solid #DFE1E6;
+      border-radius: 4px;
+      padding: 12px 16px;
+      margin: 8px 0 16px 0;
+    }
+    .endpoint-header p { margin: 4px 0; }
+  </style>
+</head>
+<body>
+
+<h1>ODG Legacy API Adapter — Overview</h1>
+
+<h2>Purpose</h2>
+<p>
+  The ODG Legacy API Adapter is a Node.js/Express application that allows existing legacy customers
+  to continue calling familiar CodeIgniter-era REST API endpoints while the adapter transparently
+  proxies those calls to the new ODG API v1.2 using OAuth client credentials behind the scenes.
+  It is a compatibility bridge intended to support already-subscribed customers during their migration
+  to the new ODG APIs — no new customers are onboarded to legacy paths.
+</p>
+
+<h2>How It Works</h2>
+<ol>
+  <li>The customer sends a request with their <strong>X-ODG-KEY</strong> header (no OAuth required on their end).</li>
+  <li>The adapter validates the key, checks subscription dates, and looks up the company's OAuth client credentials.</li>
+  <li>A per-company OAuth token is fetched and cached to call ODG API v1.2.</li>
+  <li>The upstream JSON response is transformed back into the exact legacy XML (or JSON) contract the customer expects.</li>
+</ol>
+
+<hr />
+
+<h2>Authentication</h2>
+<p>All requests must include the <code>X-ODG-KEY</code> header. Validation checks:</p>
+
+<table>
+  <thead>
+    <tr><th>Condition</th><th>HTTP Status</th><th>Error Message</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Missing or unknown key</td><td>403</td><td>Invalid web service key.</td></tr>
+    <tr><td>Account is disabled</td><td>403</td><td>Your account is disabled.</td></tr>
+    <tr><td>Service not subscribed</td><td>403</td><td>You are not subscribed for requested web service.</td></tr>
+    <tr><td>Subscription not yet started</td><td>403</td><td>Your subscription will start from MM/DD/YYYY.</td></tr>
+    <tr><td>Subscription expired</td><td>403</td><td>Your subscription is expired on MM/DD/YYYY.</td></tr>
+  </tbody>
+</table>
+
+<h2>Response Format</h2>
+<ul>
+  <li><strong>Default:</strong> XML (<code>Content-Type: application/xml</code>)</li>
+  <li><strong>JSON:</strong> Append <code>/format/json</code> to the path — e.g. <code>/restws/bpguide/format/json?icd=M54.5</code></li>
+</ul>
+<p>All legacy field names, casing, nesting, and array/singleton behavior are preserved exactly as the original PHP API produced them.</p>
+
+<hr />
+
+<h2>Supported API Endpoints</h2>
+
+<hr />
+
+<h2>1. Best Practice Guide</h2>
+
+<div class="endpoint-header">
+  <p><strong>Path:</strong> <span class="tag">GET</span> <code>/restws/bpguide</code></p>
+  <p><strong>JSON variant:</strong> <span class="tag">GET</span> <code>/restws/bpguide/format/json</code></p>
+  <p><strong>Upstream ODG API:</strong> <code>GET /guidelines</code></p>
+</div>
+
+<h3>Description</h3>
+<p>
+  Returns ODG best practice return-to-work guidelines for one or more ICD codes. Can also accept an
+  FNOL (body part / nature of injury) code pair which is first resolved to ICD codes via
+  <code>/tao/fnol/{bp}/{noi}</code> before fetching guidelines.
+</p>
+
+<h3>Request Parameters</h3>
+<table>
+  <thead>
+    <tr><th>Parameter</th><th>Required</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>icd</code></td><td>Yes (or bp+noi)</td><td>Tilde-separated ICD-9 or ICD-10 codes. Codes without a decimal are auto-normalized (e.g. <code>73556</code> → <code>735.56</code>).</td></tr>
+    <tr><td><code>bp</code></td><td>Yes (if no icd)</td><td>FNOL body-part code (zero-padded).</td></tr>
+    <tr><td><code>noi</code></td><td>Yes (if no icd)</td><td>FNOL nature-of-injury code (zero-padded).</td></tr>
+    <tr><td><code>clientid</code></td><td>No</td><td>Echoed back in response; triggers <code>rescount</code> field.</td></tr>
+  </tbody>
+</table>
+
+<h3>Response Fields (per ICD record)</h3>
+<table>
+  <thead>
+    <tr><th>Field</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>icdcode</code></td><td>ICD code</td></tr>
+    <tr><td><code>name</code></td><td>ICD description</td></tr>
+    <tr><td><code>bp[].primaryRTWpath</code></td><td>Primary return-to-work pathway</td></tr>
+    <tr><td><code>bp[].days1</code></td><td>Minimum days (best practice)</td></tr>
+    <tr><td><code>bp[].days</code></td><td>Maximum days (claim average)</td></tr>
+    <tr><td><code>activitymod[].jobtype</code></td><td>Job type for activity modification</td></tr>
+    <tr><td><code>activitymod[].jobmodification</code></td><td>Modification description</td></tr>
+    <tr><td><code>pt[].primarypath</code></td><td>Physical therapy pathway</td></tr>
+    <tr><td><code>pt[].visits</code></td><td>Recommended PT visits</td></tr>
+    <tr><td><code>pt[].weeks</code></td><td>Duration in weeks</td></tr>
+    <tr><td><code>chiro[].primarypath</code></td><td>Chiropractic pathway</td></tr>
+    <tr><td><code>chiro[].visits</code></td><td>Recommended chiropractic visits</td></tr>
+    <tr><td><code>chiro[].weeks</code></td><td>Duration in weeks</td></tr>
+    <tr><td><code>clientid</code></td><td>Echoed client ID (when provided)</td></tr>
+    <tr><td><code>rescount</code></td><td>Number of records (when clientid provided)</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <strong>Notes:</strong>
+  <ul>
+    <li>ICD-10 codes are detected by a leading letter (e.g. <code>M54.5</code>); ICD-9 by numeric prefix (e.g. <code>724.2</code>). Mixed ICD families in one request are split and forwarded separately as <code>icd9=</code> and <code>icd10=</code> query parameters.</li>
+    <li>When no results are found, a 404 with <code>{ "error": "No results found for ICD code." }</code> is returned.</li>
+  </ul>
+</div>
+
+<hr />
+
+<h2>2. UR Advisor</h2>
+
+<div class="endpoint-header">
+  <p><strong>Path:</strong> <span class="tag">GET</span> <code>/restws/uradvisor</code></p>
+  <p><strong>JSON variant:</strong> <span class="tag">GET</span> <code>/restws/uradvisor/format/json</code></p>
+  <p><strong>Upstream ODG APIs:</strong> <code>GET /tao/icds</code>, <code>GET /tao/procedures</code>, <code>GET /tao/fnol/{bp}/{noi}</code></p>
+</div>
+
+<h3>Description</h3>
+<p>
+  Returns Treatment and Outcome (TAO) utilization review data — ICD-to-procedure or procedure-to-ICD
+  mappings with incidence rates, visit statistics, and cost benchmarks. Supports three request modes:
+  ICD-driven lookup, procedure-to-ICD reverse lookup, and FNOL-driven lookup.
+  Subscription <code>outputMode=F</code> enables full output fields.
+</p>
+
+<h3>Request Parameters</h3>
+<table>
+  <thead>
+    <tr><th>Parameter</th><th>Required</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>icd</code></td><td>Yes (or bp+noi)</td><td>Tilde-separated ICD codes. Pass literal <code>9</code> or <code>10</code> for reverse lookup mode (returns ICDs for a given CPT/procedure).</td></tr>
+    <tr><td><code>cpt</code></td><td>No</td><td>Tilde-separated CPT procedure codes (US).</td></tr>
+    <tr><td><code>proc</code></td><td>No</td><td>Tilde-separated procedure codes (AU).</td></tr>
+    <tr><td><code>country</code></td><td>No</td><td><code>US</code> (default) or <code>AU</code>.</td></tr>
+    <tr><td><code>flags</code></td><td>No</td><td>TAO filter flags (<code>R</code>, <code>G</code>, <code>Y</code>, <code>B</code>).</td></tr>
+    <tr><td><code>bp</code></td><td>No</td><td>FNOL body-part code (used as fallback if ICD returns no results).</td></tr>
+    <tr><td><code>noi</code></td><td>No</td><td>FNOL nature-of-injury code.</td></tr>
+    <tr><td><code>clientid</code></td><td>No</td><td>Echoed back in response.</td></tr>
+  </tbody>
+</table>
+
+<h3>Request Modes</h3>
+<table>
+  <thead>
+    <tr><th>Mode</th><th>Condition</th><th>Upstream Call</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>ICD-driven</td><td><code>icd</code> codes provided</td><td><code>GET /tao/icds</code></td></tr>
+    <tr><td>Reverse lookup</td><td><code>icd=9</code> or <code>icd=10</code> + CPT/proc</td><td><code>GET /tao/procedures?resulttype=1|2</code></td></tr>
+    <tr><td>FNOL-only</td><td>Only <code>bp</code>+<code>noi</code> provided</td><td><code>GET /tao/fnol/{bp}/{noi}</code></td></tr>
+    <tr><td>FNOL fallback</td><td>ICD returns no results, bp+noi present</td><td>Falls back to <code>GET /tao/fnol/{bp}/{noi}</code></td></tr>
+  </tbody>
+</table>
+
+<h3>Response Fields (per ICD group)</h3>
+<table>
+  <thead>
+    <tr><th>Field</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>icd.code</code></td><td>ICD code</td></tr>
+    <tr><td><code>icd.name</code></td><td>ICD description</td></tr>
+    <tr><td><code>cpt[].code</code></td><td>CPT procedure code</td></tr>
+    <tr><td><code>cpt[].name</code></td><td>Procedure name</td></tr>
+    <tr><td><code>cpt[].incidencerate</code></td><td>Incidence rate (capped at 99.9999)</td></tr>
+    <tr><td><code>cpt[].cptfrequency</code></td><td>Procedure frequency</td></tr>
+    <tr><td><code>cpt[].visit25/50/75</code></td><td>Visit count percentiles</td></tr>
+    <tr><td><code>cpt[].visitmean</code></td><td>Mean visit count</td></tr>
+    <tr><td><code>cpt[].costmean</code></td><td>Mean cost</td></tr>
+    <tr><td><code>cpt[].odgcaa</code></td><td>ODG clinically appropriate amount</td></tr>
+    <tr><td><code>cpt[].paymentflag</code></td><td>Payment flag</td></tr>
+    <tr><td><code>cpt[].costpervisit</code></td><td>Cost per visit</td></tr>
+    <tr><td><code>cpt[].proctype</code></td><td>Procedure type <em>(full output only)</em></td></tr>
+    <tr><td><code>cpt[].taoindex</code></td><td>TAO index <em>(full output only)</em></td></tr>
+    <tr><td><code>cpt[].avglostdays</code></td><td>Average lost days <em>(full output, US only)</em></td></tr>
+    <tr><td><code>cpt[].medianlostdays</code></td><td>Median lost days <em>(full output, US only)</em></td></tr>
+    <tr><td><code>cpt[].pctneverreturn</code></td><td>Percent never return <em>(full output, US only)</em></td></tr>
+    <tr><td><code>cpt[].pctzerodays</code></td><td>Percent zero days <em>(full output, US only)</em></td></tr>
+  </tbody>
+</table>
+
+<div class="note">AU responses use <code>proc</code> instead of <code>cpt</code> for procedure records.</div>
+
+<hr />
+
+<h2>3. One Search</h2>
+
+<div class="endpoint-header">
+  <p><strong>Path:</strong> <span class="tag tag-post">POST</span> <code>/restws/onesearch</code></p>
+  <p><strong>JSON variant:</strong> <span class="tag tag-post">POST</span> <code>/restws/onesearch/format/json</code></p>
+  <p><strong>Upstream ODG API:</strong> <code>GET /search</code></p>
+</div>
+
+<h3>Description</h3>
+<p>
+  A cross-database keyword search. The client submits an XML body specifying search text and which
+  databases to search (ICD-9, ICD-10, CPT, NDC, or Treatment Topics). Results from all selected
+  databases are returned in a single flat list with a <code>type</code> discriminator field.
+</p>
+
+<h3>Request Body (XML)</h3>
+<pre>&lt;request&gt;
+  &lt;text&gt;knee pain&lt;/text&gt;
+  &lt;database&gt;
+    &lt;icd9&gt;Y&lt;/icd9&gt;
+    &lt;icd10&gt;Y&lt;/icd10&gt;
+    &lt;cpt&gt;Y&lt;/cpt&gt;
+    &lt;ndc&gt;N&lt;/ndc&gt;
+    &lt;proct&gt;N&lt;/proct&gt;
+  &lt;/database&gt;
+  &lt;clientid&gt;OPTIONAL&lt;/clientid&gt;
+&lt;/request&gt;</pre>
+
+<h3>Database Flags to Upstream Search Types</h3>
+<table>
+  <thead>
+    <tr><th>Legacy Flag</th><th>Upstream type Value</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>icd9=Y</code></td><td><code>icd9search</code></td></tr>
+    <tr><td><code>icd10=Y</code></td><td><code>icd10search</code></td></tr>
+    <tr><td><code>cpt=Y</code></td><td><code>procedurescpt</code></td></tr>
+    <tr><td><code>ndc=Y</code></td><td><code>formularyndc</code></td></tr>
+    <tr><td><code>proct=Y</code></td><td><code>treatment</code></td></tr>
+  </tbody>
+</table>
+
+<h3>Response Fields (per result item)</h3>
+<table>
+  <thead>
+    <tr><th>Field</th><th>Present For</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>type</code></td><td>All</td><td><code>ICD9</code>, <code>ICD10</code>, <code>CPT</code>, <code>NDC</code>, or <code>PROCT</code></td></tr>
+    <tr><td><code>code</code></td><td>ICD9, ICD10, CPT, NDC</td><td>Code value</td></tr>
+    <tr><td><code>name</code></td><td>All</td><td>Description or display name</td></tr>
+    <tr><td><code>brand</code></td><td>NDC only</td><td>Trade/proprietary name</td></tr>
+    <tr><td><code>chapter</code></td><td>PROCT only</td><td>Primary chapter</td></tr>
+    <tr><td><code>rescount</code></td><td>When clientid provided</td><td>Total result count</td></tr>
+    <tr><td><code>clientid</code></td><td>When clientid provided</td><td>Echoed client ID</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <strong>Validation:</strong>
+  <ul>
+    <li><code>&lt;text&gt;</code> must be present and at least 2 characters.</li>
+    <li>At least one <code>&lt;database&gt;</code> flag must be set to <code>Y</code>.</li>
+    <li>No database flags returns: <em>"One or more database element child (search in) required to process your request."</em></li>
+  </ul>
+</div>
+
+<hr />
+
+<h2>4. Comorbidity Calculator</h2>
+
+<div class="endpoint-header">
+  <p><strong>Path:</strong> <span class="tag tag-post">POST</span> <code>/calculator/comorbidity</code></p>
+  <p><strong>JSON variant:</strong> <span class="tag tag-post">POST</span> <code>/calculator/comorbidity/format/json</code></p>
+  <p><strong>Upstream ODG API:</strong> <code>POST /calculator</code> with <code>requestedoutput=RasAndRtw</code></p>
+</div>
+
+<h3>Description</h3>
+<p>
+  Calculates risk-adjusted return-to-work duration and risk assessment scores based on ICD diagnosis
+  codes and comorbidity factors. Returns risk assessment, adjusted duration benchmarks, and adjusted
+  summary guidelines. Does <strong>not</strong> return projected costs.
+  <code>adjustedduration</code> is omitted when <code>medicalonly=1</code> or <code>medicalonly=M</code>.
+</p>
+
+<h3>Request Body (XML)</h3>
+<pre>&lt;request&gt;
+  &lt;icdcodes&gt;
+    &lt;code&gt;M54.5&lt;/code&gt;
+    &lt;code&gt;E11.9&lt;/code&gt;
+  &lt;/icdcodes&gt;
+  &lt;state&gt;CA&lt;/state&gt;
+  &lt;age&gt;45&lt;/age&gt;
+  &lt;datatype&gt;WC&lt;/datatype&gt;
+  &lt;country&gt;US&lt;/country&gt;
+  &lt;medicalonly&gt;0&lt;/medicalonly&gt;
+  &lt;fulloutput&gt;Y&lt;/fulloutput&gt;
+  &lt;jobclass&gt;3&lt;/jobclass&gt;
+  &lt;cfactors&gt;
+    &lt;obesity&gt;1&lt;/obesity&gt;
+    &lt;depression&gt;1&lt;/depression&gt;
+    &lt;preexisting&gt;1&lt;/preexisting&gt;
+  &lt;/cfactors&gt;
+  &lt;procsummary&gt;
+    &lt;cpt&gt;&lt;code&gt;27447&lt;/code&gt;&lt;/cpt&gt;
+  &lt;/procsummary&gt;
+  &lt;bpcode&gt;12&lt;/bpcode&gt;
+  &lt;noicode&gt;03&lt;/noicode&gt;
+  &lt;clientid&gt;OPTIONAL&lt;/clientid&gt;
+&lt;/request&gt;</pre>
+
+<h3>Key Input Fields</h3>
+<table>
+  <thead>
+    <tr><th>Field</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>icdcodes/code</code></td><td>One or more ICD-9 or ICD-10 diagnosis codes</td></tr>
+    <tr><td><code>state</code></td><td>Two-letter US state code or <code>AUS</code> for Australia</td></tr>
+    <tr><td><code>country</code></td><td><code>US</code> (default) or <code>AU</code></td></tr>
+    <tr><td><code>age</code></td><td>Claimant age</td></tr>
+    <tr><td><code>datatype</code></td><td>Claim type (e.g. <code>WC</code>)</td></tr>
+    <tr><td><code>jobclass</code></td><td>DOL job class 1–5, or NCCI code (auto-padded to 4 digits)</td></tr>
+    <tr><td><code>medicalonly</code></td><td><code>1</code> or <code>M</code> to suppress <code>adjustedduration</code></td></tr>
+    <tr><td><code>fulloutput</code></td><td><code>Y</code> to include <code>icdcodes</code>, <code>fnolcodes</code>, <code>procsummary</code> in response</td></tr>
+    <tr><td><code>cfactors</code></td><td>Comorbidity factors: <code>obesity</code>, <code>depression</code>, <code>diabetes</code>, <code>hypertension</code>, <code>opioids</code>, <code>smoker</code>, <code>subabuse</code>, <code>surgery</code>, <code>pregnancy</code>, <code>preexisting</code></td></tr>
+    <tr><td><code>procsummary/cpt, /hcpcs, /icd, /ndc</code></td><td>Procedure codes for surgical trigger detection</td></tr>
+    <tr><td><code>bpcode / noicode</code></td><td>FNOL body part / nature of injury codes</td></tr>
+    <tr><td><code>aww, edl, comprate, mdd, lostwages</code></td><td>Financial inputs</td></tr>
+    <tr><td><code>injurydate, surgerydate</code></td><td>Dates (forwarded as ISO 8601)</td></tr>
+  </tbody>
+</table>
+
+<h3>Response Fields</h3>
+<table>
+  <thead>
+    <tr><th>Field</th><th>Condition</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>riskassessment</code></td><td>Always</td><td>Risk score with magnitude and volatility</td></tr>
+    <tr><td><code>adjustedduration.bp/cp95/cp100</code></td><td>Unless <code>medicalonly</code></td><td>Best practice / claim average / claim max duration days</td></tr>
+    <tr><td><code>adjustedsummaryguidelines</code></td><td>Always</td><td>Summary guidelines array</td></tr>
+    <tr><td><code>cfactors</code></td><td>When submitted</td><td>Applied comorbidity factors (factors with <code>applied=0</code> are filtered out)</td></tr>
+    <tr><td><code>icdcodes</code></td><td><code>fulloutput=Y</code></td><td>Resolved ICD code details with mean duration days</td></tr>
+    <tr><td><code>fnolcodes</code></td><td><code>fulloutput=Y</code> + FNOL</td><td>FNOL resolution details</td></tr>
+    <tr><td><code>procsummary</code></td><td>When submitted</td><td>CPT/ICD procedure codes with mean duration days</td></tr>
+    <tr><td><code>alertdesc</code></td><td>When present</td><td>Alert description</td></tr>
+    <tr><td><code>notes</code></td><td>When present</td><td>Additional notes</td></tr>
+    <tr><td><code>odgurl / deeplinkurl</code></td><td>Always</td><td>ODG by MCG deep link URL</td></tr>
+    <tr><td><code>comprate</code></td><td>When present</td><td>Compensation rate (currency formatted)</td></tr>
+    <tr><td><code>clientid</code></td><td>When submitted</td><td>Echoed client ID</td></tr>
+  </tbody>
+</table>
+
+<h3>cfactors Surgery Trigger Logic</h3>
+<ul>
+  <li>Codes <strong>without</strong> a decimal are treated as CPT (preferred group)</li>
+  <li>Codes <strong>with</strong> a decimal are treated as ICD procedure (fallback group)</li>
+  <li>Only the last code from the preferred group is returned as the trigger</li>
+</ul>
+
+<hr />
+
+<h2>5. Reserve Calculator</h2>
+
+<div class="endpoint-header">
+  <p><strong>Path:</strong> <span class="tag tag-post">POST</span> <code>/calculator/reserve</code></p>
+  <p><strong>JSON variant:</strong> <span class="tag tag-post">POST</span> <code>/calculator/reserve/format/json</code></p>
+  <p><strong>Upstream ODG API:</strong> <code>POST /calculator</code> with <code>requestedoutput=RasRtwCosts</code></p>
+</div>
+
+<h3>Description</h3>
+<p>
+  Calculates risk-adjusted reserves including projected costs (indemnity, medical, expense, and total)
+  across best practice, 95th percentile, and 100th percentile scenarios. Shares the same XML input
+  format as the Comorbidity Calculator. Does <strong>not</strong> return <code>adjustedsummaryguidelines</code>.
+  <code>adjustedduration</code> is included only when <code>fulloutput=Y</code>.
+</p>
+
+<p><strong>Request Body:</strong> Same XML structure as the Comorbidity Calculator (see above).</p>
+
+<h3>Key Differences from Comorbidity Calculator</h3>
+<table>
+  <thead>
+    <tr><th>Behavior</th><th>Comorbidity</th><th>Reserve</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Upstream <code>requestedoutput</code></td><td><code>RasAndRtw</code></td><td><code>RasRtwCosts</code></td></tr>
+    <tr><td><code>projectedcosts</code> returned</td><td>No</td><td>Yes (always)</td></tr>
+    <tr><td><code>adjustedsummaryguidelines</code> returned</td><td>Yes</td><td>No</td></tr>
+    <tr><td><code>adjustedduration</code> returned</td><td>Yes (unless <code>medicalonly</code>)</td><td>Yes (only when <code>fulloutput=Y</code>)</td></tr>
+  </tbody>
+</table>
+
+<h3>Additional Response Fields (Reserve only)</h3>
+<table>
+  <thead>
+    <tr><th>Field</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>projectedcosts.bp.indemnity</code></td><td>Best practice indemnity cost (currency formatted)</td></tr>
+    <tr><td><code>projectedcosts.bp.medical</code></td><td>Best practice medical cost</td></tr>
+    <tr><td><code>projectedcosts.bp.expense</code></td><td>Best practice expense</td></tr>
+    <tr><td><code>projectedcosts.bp.total</code></td><td>Best practice total</td></tr>
+    <tr><td><code>projectedcosts.cp95.*</code></td><td>95th percentile cost breakdown</td></tr>
+    <tr><td><code>projectedcosts.cp100.*</code></td><td>100th percentile cost breakdown</td></tr>
+  </tbody>
+</table>
+
+<div class="note">All currency values are formatted as <code>$#,###.##</code></div>
+
+<hr />
+
+<h2>Common Behaviors Across All APIs</h2>
+
+<table>
+  <thead>
+    <tr><th>Behavior</th><th>Detail</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>ICD Code Normalization</strong></td>
+      <td>Legacy clients sometimes omit the decimal in ICD codes (e.g. <code>73556</code> → <code>735.56</code>, <code>A4545</code> → <code>A45.45</code>). The adapter normalizes these automatically before forwarding to ODG.</td>
+    </tr>
+    <tr>
+      <td><strong>FNOL Code Padding</strong></td>
+      <td>Body part and nature-of-injury codes are zero-padded to ensure correct matching.</td>
+    </tr>
+    <tr>
+      <td><strong>Null Serialization</strong></td>
+      <td><code>null</code> values are serialized as empty strings (<code>""</code>) in both XML and JSON — never as the literal string <code>"null"</code>. Fields set to <code>undefined</code> are stripped from output entirely.</td>
+    </tr>
+    <tr>
+      <td><strong>Key Casing</strong></td>
+      <td>All legacy response keys are deep-lowercased, with the single exception of <code>primaryRTWpath</code> which preserves its mixed case.</td>
+    </tr>
+    <tr>
+      <td><strong>Array Parameters</strong></td>
+      <td>Upstream array query parameters are sent in repeated-key format without brackets (<code>icd10=A&amp;icd10=B</code>, not <code>icd10[]=A</code>).</td>
+    </tr>
+    <tr>
+      <td><strong>EOL Endpoints</strong></td>
+      <td><code>POST /restws/procsum</code> and <code>GET /restws/sumguide</code> are end-of-life and return an appropriate error response. They are not proxied to any ODG v1.2 endpoint.</td>
+    </tr>
+  </tbody>
+</table>
+
+</body>
+</html>

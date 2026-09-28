@@ -17,7 +17,27 @@ const parser = new XMLParser({
 });
 
 /**
+ * Recursively lowercases all object keys in a parsed XML value so that element
+ * names are matched case-insensitively (e.g. <State> and <state> are equivalent).
+ * Array items and attribute keys (prefixed with @_) are handled correctly.
+ * Leaf string values are left unchanged.
+ */
+function lowercaseKeys(val: unknown): unknown {
+  if (Array.isArray(val)) return val.map(lowercaseKeys);
+  if (val !== null && typeof val === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      out[k.toLowerCase()] = lowercaseKeys(v);
+    }
+    return out;
+  }
+  return val;
+}
+
+/**
  * Parses a raw XML POST body string into a plain JS object.
+ * All element (and attribute) keys are lowercased so callers can match
+ * XML field names case-insensitively (e.g. <State>, <STATE>, <state> all work).
  * Throws a LegacyError with INVALID_XML payload if parsing fails.
  *
  * @param raw  The raw request body (Buffer or string).
@@ -36,7 +56,7 @@ export function parseXmlBody(raw: Buffer | string): Record<string, unknown> {
 
   try {
     const result = parser.parse(text) as Record<string, unknown>;
-    return result;
+    return lowercaseKeys(result) as Record<string, unknown>;
   } catch {
     throw new LegacyError(ERRORS.INVALID_XML());
   }

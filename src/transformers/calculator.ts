@@ -97,11 +97,15 @@ export function parseCalcXml(raw: Buffer | string): CalcXmlInput {
     ];
     for (const f of fields) {
       const v = cfRaw[f];
-      if (v != null && typeof v !== 'object') cfactors[f] = parseInt(String(v), 10);
+      // Duplicate XML elements parse to an array — use the last value.
+      // xsi:nil elements parse to a plain object — skip them.
+      const scalar = Array.isArray(v) ? v[v.length - 1] : v;
+      if (scalar != null && typeof scalar !== 'object') cfactors[f] = parseInt(String(scalar), 10);
     }
     // preexisting → preExisting
-    const pre = cfRaw.preexisting;
-    if (pre != null && typeof pre !== 'object') cfactors.preExisting = parseInt(String(pre), 10);
+    const pre = cfRaw['preexisting'];
+    const preScalar = Array.isArray(pre) ? pre[pre.length - 1] : pre;
+    if (preScalar != null && typeof preScalar !== 'object') cfactors.preExisting = parseInt(String(preScalar), 10);
   }
 
   return {
