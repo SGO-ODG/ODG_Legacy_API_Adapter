@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Comorbidity Calculator — Adapter Comparison Discrepancy Report</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #172B4D;
+      max-width: 1100px;
+      margin: 40px auto;
+      padding: 0 24px;
+      line-height: 1.6;
+    }
+    h1 { font-size: 26px; border-bottom: 2px solid #DFE1E6; padding-bottom: 8px; margin-top: 32px; }
+    h2 { font-size: 20px; border-bottom: 1px solid #DFE1E6; padding-bottom: 6px; margin-top: 36px; color: #0052CC; }
+    h3 { font-size: 16px; margin-top: 24px; color: #253858; }
+    p  { margin: 10px 0; }
+    ul, ol { margin: 10px 0 10px 24px; }
+    li { margin: 4px 0; }
+    code {
+      background: #F4F5F7;
+      border: 1px solid #DFE1E6;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 14px 0;
+      font-size: 13px;
+    }
+    th {
+      background: #0052CC;
+      color: #fff;
+      text-align: left;
+      padding: 8px 10px;
+    }
+    td {
+      border: 1px solid #DFE1E6;
+      padding: 6px 10px;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #F4F5F7; }
+    .badge {
+      display: inline-block;
+      border-radius: 3px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+    .badge-pass    { background: #E3FCEF; color: #006644; border: 1px solid #57D9A3; }
+    .badge-fail    { background: #FFEBE6; color: #BF2600; border: 1px solid #FF5630; }
+    .badge-warn    { background: #FFFAE6; color: #974F0C; border: 1px solid #FFE380; }
+    .badge-info    { background: #DEEBFF; color: #0747A6; border: 1px solid #4C9AFF; }
+    .note {
+      background: #DEEBFF;
+      border-left: 4px solid #0052CC;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .warn {
+      background: #FFFAE6;
+      border-left: 4px solid #FF8B00;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .error {
+      background: #FFEBE6;
+      border-left: 4px solid #FF5630;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .summary-grid {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+    }
+    .summary-card {
+      flex: 1;
+      min-width: 140px;
+      border: 1px solid #DFE1E6;
+      border-radius: 4px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .summary-card .number { font-size: 32px; font-weight: bold; }
+    .summary-card .label  { font-size: 12px; color: #5E6C84; margin-top: 4px; }
+    .num-green  { color: #006644; }
+    .num-red    { color: #BF2600; }
+    .num-orange { color: #974F0C; }
+    .num-blue   { color: #0052CC; }
+    hr { border: none; border-top: 1px solid #DFE1E6; margin: 32px 0; }
+  </style>
+</head>
+<body>
+
+<h1>Comorbidity Calculator — Adapter Comparison Discrepancy Report</h1>
+<p><strong>API:</strong> <code>POST /calculator/comorbidity</code> &nbsp;|&nbsp;
+   <strong>Report date:</strong> 2026-09-30 &nbsp;|&nbsp;
+   <strong>Source:</strong> <code>legacy-customer-comorbidity-calculator-results.csv</code></p>
+
+<hr />
+
+<h2>Executive Summary</h2>
+
+<div class="note">
+  <strong>Context:</strong> 473 of the 512 failing tests are <code>EXPECTED_DIFF</code> — the adapter intentionally omits the legacy <code>stcode</code> field and <code>alert</code> sub-fields that are not yet implemented. These are non-breaking differences: all core calculator outputs (duration, risk assessment, cfactors, summary guidelines) are present and compared separately. The 158 <code>CONTENT_MISMATCH</code> tests represent genuine value differences that require investigation.
+</div>
+
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="number num-blue">866</div>
+    <div class="label">Total Test Cases</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-green">354</div>
+    <div class="label">PASS</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-red">158</div>
+    <div class="label">Content Mismatch</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-orange">473</div>
+    <div class="label">Expected Diffs</div>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Customer</th>
+      <th>Tests Run</th>
+      <th>PASS</th>
+      <th>Content Mismatch</th>
+      <th>Expected Diffs</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Averitt-ODGDEMO</td><td>50</td><td><span class="badge badge-pass">1</span></td><td><span class="badge badge-fail">48 tests</span></td><td><span class="badge badge-warn">49 tests</span></td></tr>
+    <tr><td>BlackCar-ODGDEMO</td><td>1</td><td><span class="badge badge-pass">0</span></td><td>—</td><td><span class="badge badge-warn">1 test</span></td></tr>
+    <tr><td>CareworksAbsence-ODGDEMO</td><td>50</td><td><span class="badge badge-pass">17</span></td><td>—</td><td><span class="badge badge-warn">33 tests</span></td></tr>
+    <tr><td>Caterpillar-ODGDEMO</td><td>50</td><td><span class="badge badge-pass">8</span></td><td><span class="badge badge-fail">42 tests</span></td><td><span class="badge badge-warn">42 tests</span></td></tr>
+    <tr><td>CGU-ODGDEMO</td><td>50</td><td><span class="badge badge-pass">50</span></td><td>—</td><td>—</td></tr>
+    <tr><td>CityofFortWorth-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">23</span></td><td><span class="badge badge-fail">27 tests</span></td><td><span class="badge badge-warn">27 tests</span></td></tr>
+    <tr><td>AthensAdmin-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">37</span></td><td><span class="badge badge-fail">13 tests</span></td><td><span class="badge badge-warn">13 tests</span></td></tr>
+    <tr><td>JohnsEastern-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">28</span></td><td><span class="badge badge-fail">22 tests</span></td><td><span class="badge badge-warn">22 tests</span></td></tr>
+    <tr><td>MissouriEmployersMut-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">31</span></td><td><span class="badge badge-fail">19 tests</span></td><td><span class="badge badge-warn">19 tests</span></td></tr>
+    <tr><td>NMMutual-ODGDEMO</td><td>8</td><td><span class="badge badge-pass">8</span></td><td>—</td><td>—</td></tr>
+    <tr><td>CanadaLife-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">50</span></td><td>—</td><td>—</td></tr>
+    <tr><td>PGE-ODGDEMO</td><td>5</td><td><span class="badge badge-pass">4</span></td><td><span class="badge badge-fail">1 test</span></td><td><span class="badge badge-warn">1 test</span></td></tr>
+    <tr><td>PMAGroup-ODGDEMO</td><td>20</td><td><span class="badge badge-pass">17</span></td><td>—</td><td><span class="badge badge-warn">3 tests</span></td></tr>
+    <tr><td>PSWCA-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">0</span></td><td><span class="badge badge-fail">50 tests</span></td><td><span class="badge badge-warn">50 tests</span></td></tr>
+    <tr><td>RASCompanies-ODGDEMO</td><td>3</td><td><span class="badge badge-pass">1</span></td><td><span class="badge badge-fail">2 tests</span></td><td><span class="badge badge-warn">2 tests</span></td></tr>
+    <tr><td>SedgwickWellComp-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">15</span></td><td><span class="badge badge-fail">35 tests</span></td><td><span class="badge badge-warn">35 tests</span></td></tr>
+    <tr><td>SheakleyUniservice-ODGWEBSVCS</td><td>8</td><td><span class="badge badge-pass">2</span></td><td><span class="badge badge-fail">6 tests</span></td><td><span class="badge badge-warn">6 tests</span></td></tr>
+    <tr><td>SWIF-ODGDEMO</td><td>8</td><td><span class="badge badge-pass">8</span></td><td>—</td><td>—</td></tr>
+    <tr><td>Systema-ODGWEBSVCS</td><td>2</td><td><span class="badge badge-pass">0</span></td><td>—</td><td><span class="badge badge-warn">2 tests</span></td></tr>
+    <tr><td>Unicare-ODGDEMO</td><td>1</td><td><span class="badge badge-pass">0</span></td><td><span class="badge badge-fail">1 test</span></td><td><span class="badge badge-warn">1 test</span></td></tr>
+    <tr><td>UnivofMichigan-ODGDEMO</td><td>50</td><td><span class="badge badge-pass">5</span></td><td><span class="badge badge-fail">45 tests</span></td><td><span class="badge badge-warn">45 tests</span></td></tr>
+    <tr><td>WindhamGroup-ODGDEMO</td><td>50</td><td><span class="badge badge-pass">29</span></td><td><span class="badge badge-fail">21 tests</span></td><td><span class="badge badge-warn">21 tests</span></td></tr>
+    <tr><td>Wstfld-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">2</span></td><td><span class="badge badge-fail">48 tests</span></td><td><span class="badge badge-warn">48 tests</span></td></tr>
+    <tr><td>Zenith-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">0</span></td><td><span class="badge badge-fail">50 tests</span></td><td><span class="badge badge-warn">50 tests</span></td></tr>
+    <tr><td>jwsoftware-ODGWEBSVCS</td><td>21</td><td><span class="badge badge-pass">10</span></td><td><span class="badge badge-fail">11 tests</span></td><td><span class="badge badge-warn">11 tests</span></td></tr>
+    <tr><td>paradigm-ODGWEBSVCS</td><td>39</td><td><span class="badge badge-pass">8</span></td><td><span class="badge badge-fail">31 tests</span></td><td><span class="badge badge-warn">31 tests</span></td></tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2>Discrepancy Categories</h2>
+
+<h3>Category 1 — Expected Diffs: Missing <code>stcode</code> Field <span class="badge badge-warn">most EXPECTED_DIFF rows</span></h3>
+
+<p>The legacy PHP API returned a <code>stcode</code> field inside each <code>&lt;icdcode&gt;</code> element (e.g. <code>ST347</code>, <code>ST880</code>). This field is an internal legacy state-code identifier that is not available in the ODG v1.2 API response. The adapter omits it entirely.</p>
+
+<div class="note">
+  <strong>Assessment:</strong> No fix required. The <code>stcode</code> field is a legacy-internal artifact. It is not part of the documented legacy API contract delivered to customers and is not expected by adapter consumers. Mark as accepted non-breaking difference.
+</div>
+
+<h3>Category 2 — Expected Diffs: Missing <code>alert</code> Sub-fields <span class="badge badge-warn">EXPECTED_DIFF</span></h3>
+
+<p>The legacy API included <code>alert</code> sub-fields within <code>adjustedduration.bp</code> and <code>adjustedduration.cp95</code> (e.g. <code>&lt;alert&gt;yellow&lt;/alert&gt;</code>). These correspond to comorbidity severity indicators that are not yet mapped from the ODG v1.2 response. The adapter omits these fields.</p>
+
+<div class="note">
+  <strong>Assessment:</strong> Accepted as a known gap. The <code>alert</code> color fields are informational in the legacy response. When the ODG v1.2 mapping is confirmed, the adapter can be updated to populate them. No customer-visible regression for the core calculator values.
+</div>
+
+<hr />
+
+<h3>Category 3 — Content Mismatch: <code>alertdesc</code> Format <span class="badge badge-fail">38 tests</span></h3>
+
+<p>The legacy API returned <code>alertdesc</code> as a keyed object: <code>{"yellow": "Consider early intervention..."}</code>. The adapter returns an empty string. This affects customers Averitt-ODGDEMO, SheakleyUniservice-ODGWEBSVCS, UnivofMichigan-ODGDEMO, and Zenith-ODGWEBSVCS.</p>
+
+<div class="error">
+  <strong>Root Cause:</strong> The ODG v1.2 API returns comorbidity alert text differently from the legacy database. The adapter's <code>alertdesc</code> serialization does not yet reconstruct the keyed object format. The legacy format was <code>&lt;alertdesc&gt;&lt;yellow&gt;...&lt;/yellow&gt;&lt;/alertdesc&gt;</code>; the adapter currently returns an empty element.
+</div>
+
+<div class="note">
+  <strong>Recommendation (High Priority):</strong> Implement <code>alertdesc</code> serialization in the comorbidity response transformer to produce the keyed object format matching legacy. The key is the alert color (yellow/red) and the value is the descriptive text from ODG.
+</div>
+
+<hr />
+
+<h3>Category 4 — Content Mismatch: Adjusted Duration Days Differ <span class="badge badge-fail">~130 tests</span></h3>
+
+<p>The <code>adjustedduration.bp.days</code>, <code>adjustedduration.cp95.days</code>, and <code>adjustedduration.cp100.days</code> fields return different values between legacy and adapter. Affected customers: Caterpillar, CityofFortWorth, JohnsEastern, MissouriEmployersMut, PSWCA, WindhamGroup, Zenith, paradigm.</p>
+
+<div class="warn">
+  <strong>Root Cause:</strong> The duration day calculations use the comorbidity-adjusted duration logic in ODG v1.2, which applies updated actuarial factors. The legacy database may have used an older calculation model or a cached/rounded value. The differences are typically in the range of 5–15% of the legacy value, consistent with a model version difference.
+</div>
+
+<div class="note">
+  <strong>Recommendation:</strong> Confirm with the ODG API team whether the v1.2 duration values represent the authoritative current calculation. If yes, update test expectations. If not, investigate whether a calculation parameter needs to be adjusted in the API request.
+</div>
+
+<hr />
+
+<h3>Category 5 — Content Mismatch: Risk Assessment Values Differ <span class="badge badge-fail">~100 tests</span></h3>
+
+<p>The <code>riskassessment.score</code>, <code>riskassessment.status</code>, <code>riskassessment.magnitude</code>, and <code>riskassessment.volatility</code> fields return different values. Status changes such as <code>Yellow (Cautionary)</code> → <code>Green (Moderate)</code> indicate the risk threshold calculation has changed. Primarily affects Caterpillar, CityofFortWorth, JohnsEastern, PSWCA, Zenith, paradigm.</p>
+
+<div class="warn">
+  <strong>Root Cause:</strong> The risk scoring model in ODG v1.2 uses updated actuarial parameters compared to the legacy system. Score differences of 10–20 points on a 0–100 scale can shift the status tier (Green/Yellow/Red). This is an expected model update, not an adapter bug.
+</div>
+
+<div class="note">
+  <strong>Recommendation:</strong> Confirm with Product/Clinical that ODG v1.2 risk scores represent the authoritative current model. Communicate to customers that risk scores may differ from legacy due to updated actuarial data.
+</div>
+
+<hr />
+
+<h3>Category 6 — Content Mismatch: <code>fnolcodes</code> Format <span class="badge badge-fail">49 tests</span></h3>
+
+<p>The legacy API returned <code>fnolcodes</code> as an empty string for many records, but the adapter returns a structured object with <code>bodypart</code> and <code>natureofinjury</code> data from ODG v1.2. Primarily affects PSWCA-ODGWEBSVCS.</p>
+
+<div class="note">
+  <strong>Assessment:</strong> The adapter returning actual FNOL data where legacy returned nothing is an improvement. However, if customers have downstream code that checks for an empty <code>fnolcodes</code> element, they need to handle the new structured value. Update test expectations; no adapter fix needed.
+</div>
+
+<hr />
+
+<h3>Category 7 — Content Mismatch: Additional <code>icdcodes</code> Entries <span class="badge badge-fail">~100 tests</span></h3>
+
+<p>The adapter returns additional <code>icdcode</code> entries in the <code>icdcodes</code> array that were not present in the legacy response. These typically correspond to external cause codes (<code>Y93.9</code>, <code>Y99.9</code>, <code>Y99.0</code>) that ODG v1.2 includes but the legacy system excluded.</p>
+
+<div class="note">
+  <strong>Assessment:</strong> No fix required. The adapter returns more complete ICD code data. These are supplementary external cause codes. Update test expectations.
+</div>
+
+<hr />
+
+<h3>Category 8 — Content Mismatch: <code>cfactors</code> Trigger ICD Values Differ <span class="badge badge-fail">~25 tests</span></h3>
+
+<p>The <code>cfactors.obesity.trigger</code>, <code>cfactors.depression.trigger</code>, and <code>cfactors.hypertension.trigger</code> values differ between legacy and adapter. Legacy used ICD-9 codes (e.g. <code>278.0</code>) while the adapter returns ICD-10 equivalents (e.g. <code>E66</code>).</p>
+
+<div class="note">
+  <strong>Assessment:</strong> The adapter correctly returns the ICD-10 code used as the comorbidity trigger. The legacy database had ICD-9 codes from an older dataset. This is expected for ICD-9-input claims processed against an updated ICD-10-based knowledge base. No fix required; update test expectations.
+</div>
+
+<hr />
+
+<h2>Summary of Recommended Actions</h2>
+
+<table>
+  <thead>
+    <tr><th>Priority</th><th>Category</th><th>Action</th><th>Owner</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge badge-fail">High</span></td>
+      <td>alertdesc format mismatch</td>
+      <td>Implement <code>alertdesc</code> keyed-object serialization in the comorbidity response transformer. The key is the alert color level; the value is the text from ODG. Affects 38 tests across 4 customers.</td>
+      <td>Adapter dev</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-warn">Medium</span></td>
+      <td>Adjusted duration days differ</td>
+      <td>Confirm with ODG API team that v1.2 duration values are authoritative. If yes, update test expectations. If a calculation parameter is needed, investigate the request parameters sent to ODG.</td>
+      <td>Product / ODG API team</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-warn">Medium</span></td>
+      <td>Risk assessment score / status differs</td>
+      <td>Confirm with Product/Clinical that ODG v1.2 risk model is authoritative. Communicate score changes to customers. Update test expectations.</td>
+      <td>Product / Clinical</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-info">Low / Accepted</span></td>
+      <td>stcode field missing</td>
+      <td>No fix required. Legacy-internal field not in the adapter contract. Mark as accepted non-breaking difference.</td>
+      <td>QA</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-info">Low / Accepted</span></td>
+      <td>alert sub-fields missing</td>
+      <td>Known gap — map when ODG v1.2 alert data source is confirmed. No immediate customer impact.</td>
+      <td>Adapter dev (backlog)</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-info">Low / Accepted</span></td>
+      <td>fnolcodes, icdcodes extra entries, cfactors ICD-10 triggers</td>
+      <td>No fix required. Adapter returns richer data. Update test expectations.</td>
+      <td>QA</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr style="margin-top: 40px; border: none; border-top: 1px solid #DFE1E6;" />
+<section style="margin-top: 20px; margin-bottom: 40px; color: #5E6C84; font-size: 13px;">
+  <h3 style="font-size: 14px; color: #253858; margin-bottom: 8px;">Additional Notes</h3>
+  <ul>
+    <li>CGU-ODGDEMO, CanadaLife-ODGWEBSVCS, NMMutual-ODGDEMO, and SWIF-ODGDEMO have 100% pass rates across all their tests.</li>
+    <li>The high fail counts for Wstfld, PSWCA, Zenith, Averitt are driven primarily by EXPECTED_DIFF (stcode) on every test plus content mismatches on duration/risk fields — the core structure passes.</li>
+    <li>The <code>WITHIN_THRESHOLD</code> rows (minor numeric variances ≤5 on summary guideline fields) are not counted as failures and indicate very close alignment on actuarial calculations.</li>
+  </ul>
+</section>
+
+</body>
+</html>

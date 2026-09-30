@@ -11,5 +11,5 @@ coverage/
 node_modules/
 dist/
 api-tester/tests-scripts/output/
-.claude/skills/compare-api-script/SKILL.md
+.claude/settings.local.json
 tasks/todo.md

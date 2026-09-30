@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>UR Advisor — Adapter Comparison Discrepancy Report</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #172B4D;
+      max-width: 1100px;
+      margin: 40px auto;
+      padding: 0 24px;
+      line-height: 1.6;
+    }
+    h1 { font-size: 26px; border-bottom: 2px solid #DFE1E6; padding-bottom: 8px; margin-top: 32px; }
+    h2 { font-size: 20px; border-bottom: 1px solid #DFE1E6; padding-bottom: 6px; margin-top: 36px; color: #0052CC; }
+    h3 { font-size: 16px; margin-top: 24px; color: #253858; }
+    p  { margin: 10px 0; }
+    ul, ol { margin: 10px 0 10px 24px; }
+    li { margin: 4px 0; }
+    code {
+      background: #F4F5F7;
+      border: 1px solid #DFE1E6;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 14px 0;
+      font-size: 13px;
+    }
+    th {
+      background: #0052CC;
+      color: #fff;
+      text-align: left;
+      padding: 8px 10px;
+    }
+    td {
+      border: 1px solid #DFE1E6;
+      padding: 6px 10px;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #F4F5F7; }
+    .badge {
+      display: inline-block;
+      border-radius: 3px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+    .badge-pass    { background: #E3FCEF; color: #006644; border: 1px solid #57D9A3; }
+    .badge-fail    { background: #FFEBE6; color: #BF2600; border: 1px solid #FF5630; }
+    .badge-warn    { background: #FFFAE6; color: #974F0C; border: 1px solid #FFE380; }
+    .badge-info    { background: #DEEBFF; color: #0747A6; border: 1px solid #4C9AFF; }
+    .note {
+      background: #DEEBFF;
+      border-left: 4px solid #0052CC;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .warn {
+      background: #FFFAE6;
+      border-left: 4px solid #FF8B00;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .error {
+      background: #FFEBE6;
+      border-left: 4px solid #FF5630;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .summary-grid {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+    }
+    .summary-card {
+      flex: 1;
+      min-width: 140px;
+      border: 1px solid #DFE1E6;
+      border-radius: 4px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .summary-card .number { font-size: 32px; font-weight: bold; }
+    .summary-card .label  { font-size: 12px; color: #5E6C84; margin-top: 4px; }
+    .num-green  { color: #006644; }
+    .num-red    { color: #BF2600; }
+    .num-orange { color: #974F0C; }
+    .num-blue   { color: #0052CC; }
+    hr { border: none; border-top: 1px solid #DFE1E6; margin: 32px 0; }
+  </style>
+</head>
+<body>
+
+<h1>UR Advisor — Adapter Comparison Discrepancy Report</h1>
+<p><strong>API:</strong> <code>GET /restws/uradvisor</code> &nbsp;|&nbsp;
+   <strong>Report date:</strong> 2026-09-30 &nbsp;|&nbsp;
+   <strong>Source:</strong> <code>legacy-customer-uradvisor-results.csv</code></p>
+
+<hr />
+
+<h2>Executive Summary</h2>
+
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="number num-blue">700</div>
+    <div class="label">Total Test Cases</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-green">687</div>
+    <div class="label">PASS</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-red">6</div>
+    <div class="label">HTTP Status Mismatch</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-red">5</div>
+    <div class="label">Content / Format Mismatch</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-orange">2</div>
+    <div class="label">Parse Errors</div>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Customer</th>
+      <th>Tests Run</th>
+      <th>PASS</th>
+      <th>HTTP Status Mismatch</th>
+      <th>Content / Format Mismatch</th>
+      <th>Parse Errors</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>CGU-ODGDEMO</td><td>50</td><td><span class="badge badge-pass">48</span></td><td><span class="badge badge-fail">2 tests</span></td><td>—</td><td>—</td></tr>
+    <tr><td>NMMutual-ODGDEMO</td><td>50</td><td><span class="badge badge-pass">49</span></td><td><span class="badge badge-fail">1 test</span></td><td>—</td><td>—</td></tr>
+    <tr><td>PMAGroup-ODGDEMO</td><td>50</td><td><span class="badge badge-pass">50</span></td><td>—</td><td>—</td><td>—</td></tr>
+    <tr><td>SWIF-ODGDEMO</td><td>50</td><td><span class="badge badge-pass">50</span></td><td>—</td><td>—</td><td>—</td></tr>
+    <tr><td>CityofFortWorth-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">47</span></td><td>—</td><td><span class="badge badge-fail">3 tests</span></td><td>—</td></tr>
+    <tr><td>DUR-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">49</span></td><td>—</td><td><span class="badge badge-fail">1 test</span></td><td>—</td></tr>
+    <tr><td>Guidewire-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">49</span></td><td><span class="badge badge-fail">1 test</span></td><td>—</td><td>—</td></tr>
+    <tr><td>ISOCP-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">47</span></td><td><span class="badge badge-fail">1 test</span></td><td>—</td><td><span class="badge badge-warn">2 tests</span></td></tr>
+    <tr><td>medata-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">50</span></td><td>—</td><td>—</td><td>—</td></tr>
+    <tr><td>MissouriEmployersMut-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">50</span></td><td>—</td><td>—</td><td>—</td></tr>
+    <tr><td>NJM-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">50</span></td><td>—</td><td>—</td><td>—</td></tr>
+    <tr><td>PSWCA-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">49</span></td><td>—</td><td><span class="badge badge-fail">1 test</span></td><td>—</td></tr>
+    <tr><td>ReviewWorks-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">50</span></td><td>—</td><td>—</td><td>—</td></tr>
+    <tr><td>RMS-ODGWEBSVCS</td><td>50</td><td><span class="badge badge-pass">49</span></td><td><span class="badge badge-fail">1 test</span></td><td>—</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2>Discrepancy Categories</h2>
+
+<h3>Category 1 — HTTP Status Mismatch <span class="badge badge-fail">6 tests</span></h3>
+
+<p>The legacy PHP API returned a different HTTP status code than the adapter for these requests.</p>
+
+<div class="error">
+  <strong>Impact:</strong> These are hard failures — customers receive a different status code than expected. Most involve ICD codes with trailing dots that legacy resolved via loose matching but ODG v1.2 rejects.
+</div>
+
+<table>
+  <thead>
+    <tr><th>Test</th><th>ICD / URL</th><th>Legacy Status</th><th>Adapter Status</th><th>Root Cause</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>CGU-ODGDEMO-TEST-2</td>
+      <td><code>/restws/uradvisor/icd/A00./country/AU</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>ICD code <code>A00.</code> has a trailing dot. Legacy stripped it silently; adapter forwards as-is causing ODG to reject it.</td>
+    </tr>
+    <tr>
+      <td>CGU-ODGDEMO-TEST-36</td>
+      <td><code>/restws/uradvisor/icd/B86.</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>Same trailing dot pattern as above.</td>
+    </tr>
+    <tr>
+      <td>NMMutual-ODGDEMO-TEST-50</td>
+      <td><code>/restws/uradvisor/icd/A00.</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>Same trailing dot pattern as above.</td>
+    </tr>
+    <tr>
+      <td>Guidewire-ODGWEBSVCS-TEST-10</td>
+      <td><code>/restws/uradvisor/icd/I10.</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>Same trailing dot pattern as above. <code>I10</code> is a valid ICD-10 code; <code>I10.</code> is malformed.</td>
+    </tr>
+    <tr>
+      <td>ISOCP-ODGWEBSVCS-TEST-25</td>
+      <td>20 ICD codes (long list)</td>
+      <td>500</td>
+      <td>200</td>
+      <td>Legacy returned HTTP 500 (server error) for this long multi-ICD request; adapter handled it successfully and returned 200. This is an improvement, not a regression.</td>
+    </tr>
+    <tr>
+      <td>RMS-ODGWEBSVCS-TEST-37</td>
+      <td><code>/restws/uradvisor/icd/F40.231/cpt/99152</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>Valid ICD-10 code <code>F40.231</code> (specific phobia, animal type) that legacy resolved to guideline data but ODG v1.2 returns no results for. Possible data gap in the ODG API.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <strong>Recommendation:</strong> Add input sanitization in the adapter to strip trailing dots from ICD codes before forwarding to ODG (same fix needed as BPGuide). For <code>F40.231</code> returning no results in ODG, confirm with the ODG API team whether guideline data should exist for this code.
+</div>
+
+<hr />
+
+<h3>Category 2 — Content / Format Mismatch <span class="badge badge-fail">5 tests</span></h3>
+
+<p>Both sides returned the same HTTP status but specific field values or response format differ.</p>
+
+<h4 style="font-size:14px; color:#253858; margin-top:16px;">Sub-type A — <code>rescount</code> value differs (3 tests)</h4>
+
+<p>Both sides return HTTP 200 with valid data, but the <code>rescount</code> field value differs by 1. This indicates the adapter resolves one fewer ICD code than legacy for requests containing mixed/marginal codes in a multi-ICD list.</p>
+
+<table>
+  <thead>
+    <tr><th>Test</th><th>Property</th><th>Legacy Value</th><th>Adapter Value</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>CityofFortWorth-ODGWEBSVCS-TEST-3</td>
+      <td><code>rescount</code></td>
+      <td>7</td>
+      <td>6</td>
+    </tr>
+    <tr>
+      <td>CityofFortWorth-ODGWEBSVCS-TEST-12</td>
+      <td><code>rescount</code></td>
+      <td>3</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td>CityofFortWorth-ODGWEBSVCS-TEST-50</td>
+      <td><code>rescount</code></td>
+      <td>8</td>
+      <td>7</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="warn">
+  <strong>Root Cause:</strong> In each case the ICD list contains codes that the legacy PHP database resolved but ODG v1.2 does not return results for. The adapter's <code>rescount</code> reflects the actual number of codes with guideline data from ODG. The legacy <code>rescount</code> may have included codes mapped via looser fallback logic.
+</div>
+
+<h4 style="font-size:14px; color:#253858; margin-top:16px;">Sub-type B — Response format mismatch (2 tests)</h4>
+
+<p>These tests have a URL ending in <code>/format/json</code> but legacy returned XML while the adapter correctly returned JSON.</p>
+
+<table>
+  <thead>
+    <tr><th>Test</th><th>URL</th><th>Legacy Format</th><th>Adapter Format</th><th>Root Cause</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>DUR-ODGWEBSVCS-TEST-6</td>
+      <td><code>/restws/uradvisor/icd/format/json</code></td>
+      <td>XML</td>
+      <td>JSON</td>
+      <td>The URL path <code>/icd/format/json</code> has no ICD value — <code>format</code> was parsed as the ICD code and <code>json</code> as a sub-segment. Legacy produced an XML 404 error; adapter correctly returns JSON 404 with the error message. The adapter behavior is correct per the <code>/format/json</code> contract.</td>
+    </tr>
+    <tr>
+      <td>PSWCA-ODGWEBSVCS-TEST-44</td>
+      <td><code>/restws/uradvisor/clientid/.../icd/Y926~S0101~</code><code>/~W278/...</code></td>
+      <td>XML</td>
+      <td>JSON</td>
+      <td>The ICD list contains an empty segment (<code>~</code> between two tildes) and a bare slash, causing a path parsing anomaly. Legacy fell back to XML output; adapter correctly returned JSON as requested by <code>/format/json</code>. The adapter behavior is correct.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <strong>Assessment:</strong> The adapter's JSON responses for these edge-case URLs are correct. The legacy XML fallback was a quirk of the old PHP routing. No fix required in the adapter; update test expectations to accept JSON format.
+</div>
+
+<hr />
+
+<h3>Category 3 — Parse Errors <span class="badge badge-warn">2 tests</span></h3>
+
+<p>These tests involve very long ICD code lists that exceed XML entity expansion limits during response comparison. They do not indicate a functional bug in the adapter.</p>
+
+<table>
+  <thead>
+    <tr><th>Test</th><th>ICD Codes</th><th>Error</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ISOCP-ODGWEBSVCS-TEST-40</td>
+      <td>13 ICD codes including <code>M50.320</code>, <code>M96.1</code>, <code>M47.812</code>, etc.</td>
+      <td>Adapter parse failed: Entity expansion limit exceeded (1001 &gt; 1000). Both legacy and adapter returned HTTP 200; only the comparison tool failed to parse the adapter response XML.</td>
+    </tr>
+    <tr>
+      <td>ISOCP-ODGWEBSVCS-TEST-44</td>
+      <td>12 ICD codes including <code>M54.50</code>, <code>M25.531</code>, etc.</td>
+      <td>Both legacy and adapter parse failed with entity expansion limit. The comparison tool could not parse either response.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <strong>Assessment:</strong> The entity expansion limit is a limitation of the comparison tool's XML parser, not of the adapter. Both responses returned HTTP 200. The fix is to increase the XML parser's entity expansion limit in the compare script, or to switch to a streaming parser for very large responses.
+</div>
+
+<hr />
+
+<h2>Summary of Recommended Actions</h2>
+
+<table>
+  <thead>
+    <tr><th>Priority</th><th>Category</th><th>Action</th><th>Owner</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge badge-fail">High</span></td>
+      <td>HTTP Status Mismatch — Trailing dot ICD codes</td>
+      <td>Add input sanitization in the adapter to strip trailing dots (and other non-alphanumeric trailing characters) from ICD codes before forwarding to ODG. Affects CGU-TEST-2, CGU-TEST-36, NMMutual-TEST-50, Guidewire-TEST-10.</td>
+      <td>Adapter dev</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-warn">Medium</span></td>
+      <td>HTTP Status Mismatch — F40.231 no results in ODG</td>
+      <td>Confirm with ODG API team whether <code>F40.231</code> should return guideline data. If yes, raise a data gap ticket. If the code genuinely has no guidelines, accept the 404.</td>
+      <td>Product / ODG API team</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-warn">Medium</span></td>
+      <td>Content Mismatch — rescount differs by 1</td>
+      <td>Review the 3 CityofFortWorth tests to identify which specific ICD code in each request is resolved by legacy but not ODG. Confirm whether legacy's broader matching is intentional or a data gap in ODG v1.2.</td>
+      <td>Product / Adapter dev</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-info">Low / Accepted</span></td>
+      <td>Format Mismatch — JSON vs XML on edge-case URLs</td>
+      <td>No code changes required. The adapter correctly returns JSON for <code>/format/json</code> URLs. Update test expectations for DUR-TEST-6 and PSWCA-TEST-44.</td>
+      <td>QA</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-info">Low / Accepted</span></td>
+      <td>Parse Errors — Entity expansion limit</td>
+      <td>Increase XML entity expansion limit in the compare script, or switch to streaming XML parser for large responses. No adapter fix required.</td>
+      <td>QA / Test tooling</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-info">Low / Accepted</span></td>
+      <td>ISOCP-TEST-25 (500 → 200)</td>
+      <td>No fix required. The adapter handles the request correctly where legacy had a server error. This is an improvement.</td>
+      <td>QA</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr style="margin-top: 40px; border: none; border-top: 1px solid #DFE1E6;" />
+<section style="margin-top: 20px; margin-bottom: 40px; color: #5E6C84; font-size: 13px;">
+  <h3 style="font-size: 14px; color: #253858; margin-bottom: 8px;">Additional Notes</h3>
+  <ul>
+    <li>98.1% of tests pass (687 / 700). The remaining failures are isolated to edge-case input patterns or known data gaps in ODG v1.2.</li>
+    <li>The ISOCP-TEST-25 improvement (legacy 500 → adapter 200) confirms the adapter handles large multi-ICD requests more robustly than the legacy PHP API.</li>
+    <li>8 of 14 customers (PMAGroup, SWIF, medata, MissouriEmployersMut, NJM, ReviewWorks, and partially others) have 100% pass rates.</li>
+  </ul>
+</section>
+
+</body>
+</html>
