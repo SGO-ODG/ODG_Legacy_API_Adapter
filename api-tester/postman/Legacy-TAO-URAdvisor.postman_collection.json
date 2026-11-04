@@ -1,0 +1,103 @@
+{
+  "info": {
+    "name": "Legacy TAO UR Advisor API",
+    "description": "Validates the Legacy TAO UR Advisor API (/restws/uradvisor) using a CSV data file in the Postman Collection Runner.\n\nCSV columns: clientId, icd9Code, icd10Code, cptCode, bpCode, noiCode, country\n\n- clientId is ignored.\n- icd9Code and icd10Code are combined with ~ into a single /icd/ path segment; empty values are skipped.\n- All other columns become path segments only when non-empty.\n\nBefore running, set the collection variables baseUrl and apiKey.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "description": "Base URL of the Legacy API Adapter (e.g. http://localhost:3000)"
+    },
+    {
+      "key": "apiKey",
+      "value": "YOUR_API_KEY_HERE",
+      "description": "Value sent in the X-ODG-KEY request header"
+    }
+  ],
+  "item": [
+    {
+      "name": "UR Advisor - Dynamic Path",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Helper: safely read a CSV column as a trimmed string, returns '' when absent/null",
+              "function col(key) {",
+              "    const v = pm.iterationData.get(key);",
+              "    if (v === null || v === undefined) return '';",
+              "    return String(v).trim();",
+              "}",
+              "",
+              "// Combine non-empty ICD9 and ICD10 codes with ~",
+              "const icd9  = col('icd9Code');",
+              "const icd10 = col('icd10Code');",
+              "const icdParts = [icd9, icd10].filter(v => v !== '');",
+              "",
+              "let path = '/restws/uradvisor';",
+              "if (icdParts.length > 0) {",
+              "    path += '/icd/' + icdParts.join('~');",
+              "}",
+              "",
+              "// Append remaining optional path segments when non-empty",
+              "const bp      = col('bpCode');",
+              "const noi     = col('noiCode');",
+              "const cpt     = col('cptCode');",
+              "const country = col('country');",
+              "",
+              "if (bp)      path += '/bp/'      + bp;",
+              "if (noi)     path += '/noi/'     + noi;",
+              "if (cpt)     path += '/cpt/'     + cpt;",
+              "if (country) path += '/country/' + country;",
+              "",
+              "pm.variables.set('dynamicPath', path);",
+              "console.log('Request path: ' + path);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200 OK', () => {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response is not empty', () => {",
+              "    pm.expect(pm.response.text().trim()).to.not.be.empty;",
+              "});",
+              "",
+              "pm.test('No upstream credentials leaked', () => {",
+              "    const body = pm.response.text();",
+              "    pm.expect(body.toLowerCase()).to.not.include('oauth');",
+              "    pm.expect(body.toLowerCase()).to.not.include('bearer');",
+              "    pm.expect(body.toLowerCase()).to.not.include('client_secret');",
+              "});",
+              "",
+              "// Log the path and HTTP status for easy review in the runner output",
+              "console.log('[' + pm.response.status + '] ' + pm.variables.get('dynamicPath'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-ODG-KEY",
+            "value": "{{apiKey}}",
+            "description": "Legacy API authentication key"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}{{dynamicPath}}",
+          "host": ["{{baseUrl}}{{dynamicPath}}"]
+        }
+      }
+    }
+  ]
+}

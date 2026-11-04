@@ -1,0 +1,158 @@
+{
+  "info": {
+    "name": "Legacy Comorbidity Calculator API",
+    "description": "Validates the Legacy Comorbidity Calculator API (/calculator/comorbidity) using a CSV data file in the Postman Collection Runner.\n\nCSV columns: clientId, icd9Code, icd10Code, cptCode, state, country, age, jobClass, cfOpioids, cfDepression, cfDiabetes, cfHypertension, cfLegalrep, cfObesity, cfSmoker, cfSubabuse, cfSurgery\n\n- clientId and country are ignored.\n- icd9Code and icd10Code each become a separate <code> element inside <icdcodes>; empty values are skipped.\n- All other columns are included in the XML body only when non-empty.\n- datatype is read from the collection variable datatype (default WC).\n- country is read from the collection variable country (default US).\n\nBefore running, set the collection variables baseUrl, apiKey, datatype, and country.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "description": "Base URL of the Legacy API Adapter (e.g. http://localhost:3000)"
+    },
+    {
+      "key": "apiKey",
+      "value": "YOUR_API_KEY_HERE",
+      "description": "Value sent in the X-ODG-KEY request header"
+    },
+    {
+      "key": "datatype",
+      "value": "WC",
+      "description": "Value sent in the <datatype> XML element (e.g. WC for Workers Compensation)"
+    },
+    {
+      "key": "country",
+      "value": "US",
+      "description": "Value sent in the <country> XML element (e.g. US or AU)"
+    }
+  ],
+  "item": [
+    {
+      "name": "Comorbidity Calculator - Dynamic XML Body",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Helper: safely read a CSV column as a trimmed string, returns '' when absent/null/numeric",
+              "function col(key) {",
+              "    const v = pm.iterationData.get(key);",
+              "    if (v === null || v === undefined) return '';",
+              "    return String(v).trim();",
+              "}",
+              "",
+              "// ICD codes — each becomes its own <code> element inside <icdcodes>",
+              "const icd9  = col('icd9Code');",
+              "const icd10 = col('icd10Code');",
+              "const icdCodes = [icd9, icd10].filter(v => v !== '');",
+              "",
+              "let icdXml = '';",
+              "if (icdCodes.length > 0) {",
+              "    icdXml = '<icdcodes>'",
+              "           + icdCodes.map(c => '<code>' + c + '</code>').join('')",
+              "           + '</icdcodes>';",
+              "}",
+              "",
+              "// Simple scalar fields",
+              "const state    = col('state');",
+              "const age      = col('age');",
+              "const jobClass = col('jobClass');",
+              "const cptCode  = col('cptCode');",
+              "const country  = pm.variables.get('country') || '';",
+              "",
+              "// cfactors — only emit elements whose CSV value is non-empty",
+              "const cfFields = [",
+              "    ['depression',  col('cfDepression')],",
+              "    ['diabetes',    col('cfDiabetes')],",
+              "    ['hypertension',col('cfHypertension')],",
+              "    ['legalrep',    col('cfLegalrep')],",
+              "    ['obesity',     col('cfObesity')],",
+              "    ['smoker',      col('cfSmoker')],",
+              "    ['opioids',     col('cfOpioids')],",
+              "    ['subabuse',    col('cfSubabuse')],",
+              "    ['surgery',     col('cfSurgery')]",
+              "];",
+              "const cfActive = cfFields.filter(([, v]) => v !== '');",
+              "",
+              "let cfXml = '';",
+              "if (cfActive.length > 0) {",
+              "    cfXml = '<cfactors>'",
+              "          + cfActive.map(([k, v]) => '<' + k + '>' + v + '</' + k + '>').join('')",
+              "          + '</cfactors>';",
+              "}",
+              "",
+              "// procsummary — only when cptCode is present",
+              "const cptXml = cptCode",
+              "    ? '<procsummary><cpt><code>' + cptCode + '</code></cpt></procsummary>'",
+              "    : '';",
+              "",
+              "// Assemble the full XML payload",
+              "let xml = '<cbcalc>';",
+              "xml += icdXml;",
+              "if (state)    xml += '<state>'    + state    + '</state>';",
+              "if (age)      xml += '<age>'      + age      + '</age>';",
+              "const datatype = pm.variables.get('datatype') || 'WC';",
+              "xml += '<datatype>' + datatype + '</datatype>';",
+              "if (country) xml += '<country>'  + country  + '</country>';",
+              "if (jobClass) xml += '<jobclass>' + jobClass + '</jobclass>';",
+              "xml += cfXml;",
+              "xml += cptXml;",
+              "xml += '</cbcalc>';",
+              "",
+              "pm.variables.set('xmlBody', xml);",
+              "console.log('XML body: ' + xml);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200 OK', () => {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response is not empty', () => {",
+              "    pm.expect(pm.response.text().trim()).to.not.be.empty;",
+              "});",
+              "",
+              "pm.test('No upstream credentials leaked', () => {",
+              "    const body = pm.response.text();",
+              "    pm.expect(body.toLowerCase()).to.not.include('oauth');",
+              "    pm.expect(body.toLowerCase()).to.not.include('bearer');",
+              "    pm.expect(body.toLowerCase()).to.not.include('client_secret');",
+              "});",
+              "",
+              "console.log('[' + pm.response.status + '] /calculator/comorbidity');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-ODG-KEY",
+            "value": "{{apiKey}}",
+            "description": "Legacy API authentication key"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{{xmlBody}}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/calculator/comorbidity",
+          "host": ["{{baseUrl}}"],
+          "path": ["calculator", "comorbidity"]
+        }
+      }
+    }
+  ]
+}
