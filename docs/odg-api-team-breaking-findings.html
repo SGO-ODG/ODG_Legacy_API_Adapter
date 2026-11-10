@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ODG API Team — Breaking Findings for Go-Live Discussion</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    body { font-size: 14px; color: #172B4D; }
+    h1 { font-size: 26px; border-bottom: 2px solid #DFE1E6; padding-bottom: 8px; margin-top: 32px; }
+    h2 { font-size: 20px; border-bottom: 1px solid #DFE1E6; padding-bottom: 6px; margin-top: 40px; color: #0052CC; }
+    h3 { font-size: 16px; margin-top: 24px; color: #253858; }
+    code {
+      background: #F4F5F7;
+      border: 1px solid #DFE1E6;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+      color: #172B4D;
+    }
+    .section-anchor { scroll-margin-top: 80px; }
+    .finding-card {
+      border-left: 4px solid #FF5630;
+      background: #FFEBE6;
+      border-radius: 0 4px 4px 0;
+      padding: 12px 16px;
+      margin: 12px 0;
+    }
+    .finding-card.warn {
+      border-left-color: #FF8B00;
+      background: #FFFAE6;
+    }
+    .finding-card.info {
+      border-left-color: #0052CC;
+      background: #DEEBFF;
+    }
+    .badge-critical { background: #BF2600; color: #fff; font-size: 11px; }
+    .badge-high     { background: #FF5630; color: #fff; font-size: 11px; }
+    .badge-medium   { background: #FF8B00; color: #fff; font-size: 11px; }
+    th { background: #0052CC; color: #fff; }
+    td, th { padding: 8px 10px; vertical-align: top; font-size: 13px; }
+    .num-red    { color: #BF2600; font-weight: bold; font-size: 28px; }
+    .num-orange { color: #974F0C; font-weight: bold; font-size: 28px; }
+    .num-blue   { color: #0052CC; font-weight: bold; font-size: 28px; }
+    .num-label  { font-size: 12px; color: #5E6C84; margin-top: 4px; }
+    .toc-link { font-size: 14px; }
+    hr { border: none; border-top: 1px solid #DFE1E6; margin: 32px 0; }
+  </style>
+</head>
+<body>
+<div class="container" style="max-width: 1100px; padding: 0 24px 60px;">
+
+<h1>ODG API Team — Breaking Findings for Go-Live Discussion</h1>
+<p class="text-muted">
+  <strong>Report date:</strong> 2026-11-10 &nbsp;|&nbsp;
+  <strong>Source:</strong> All five adapter comparison discrepancy reports (BPGuide, UR Advisor, OneSearch, Comorbidity Calculator, Reserve Calculator)
+</p>
+
+<div class="finding-card mb-3">
+  <strong>Purpose of this report:</strong> This document consolidates all findings from the legacy-to-adapter comparison testing that <strong>require action or confirmation from the ODG API Development / Product team</strong> before the adapter can go live with legacy customers. It excludes adapter-internal bugs (ICD sanitization, error-code alignment) which are tracked separately and already in progress. Every item below is a blocker or high-risk issue that the adapter team cannot resolve unilaterally.
+</div>
+
+<hr />
+
+<h2>Executive Summary</h2>
+
+<div class="row g-3 my-2">
+  <div class="col text-center border rounded p-3">
+    <div class="num-red">4</div>
+    <div class="num-label">Finding Categories</div>
+  </div>
+  <div class="col text-center border rounded p-3">
+    <div class="num-red">2</div>
+    <div class="num-label">Critical Blockers</div>
+  </div>
+  <div class="col text-center border rounded p-3">
+    <div class="num-orange">2</div>
+    <div class="num-label">High Priority Confirmations</div>
+  </div>
+  <div class="col text-center border rounded p-3">
+    <div class="num-blue">5</div>
+    <div class="num-label">APIs Affected</div>
+  </div>
+  <div class="col text-center border rounded p-3">
+    <div class="num-red">~900+</div>
+    <div class="num-label">Tests Impacted (total)</div>
+  </div>
+</div>
+
+<table class="table table-bordered mt-4">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Finding Category</th>
+      <th>APIs Affected</th>
+      <th>Tests Impacted</th>
+      <th>Priority</th>
+      <th>ODG Action Required</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="#finding-1" class="toc-link">1</a></td>
+      <td>ODG API Data Gaps — Valid ICD/NCCI codes returning no results in v1.2</td>
+      <td>UR Advisor, BPGuide, Reserve Calculator</td>
+      <td>~7 tests (specific codes)</td>
+      <td><span class="badge badge-critical rounded-pill">Critical</span></td>
+      <td>Confirm whether each listed code should return data. Raise data gap ticket for any confirmed missing entries.</td>
+    </tr>
+    <tr>
+      <td><a href="#finding-2" class="toc-link">2</a></td>
+      <td>Alert Color &amp; AlertDesc Fields Not Available in ODG v1.2 Response</td>
+      <td>Comorbidity Calculator, Reserve Calculator</td>
+      <td>~71 tests</td>
+      <td><span class="badge badge-critical rounded-pill">Critical</span></td>
+      <td>Identify which field/path in the v1.2 <code>/calculator</code> response carries the alert color (yellow/red/green) and the alert description text. Without this, the adapter cannot populate these legacy fields.</td>
+    </tr>
+    <tr>
+      <td><a href="#finding-3" class="toc-link">3</a></td>
+      <td>Actuarial Model Version Changes — Duration, Risk Scores, Projected Costs differ systematically</td>
+      <td>Comorbidity Calculator, Reserve Calculator, BPGuide</td>
+      <td>~830 tests</td>
+      <td><span class="badge badge-high rounded-pill">High</span></td>
+      <td>Confirm that ODG v1.2 values are authoritative. Provide a written statement that new values represent the current clinical model so customers can be notified of expected differences before go-live.</td>
+    </tr>
+    <tr>
+      <td><a href="#finding-4" class="toc-link">4</a></td>
+      <td>Clinical Notes Text Changes</td>
+      <td>Reserve Calculator</td>
+      <td>~17 tests</td>
+      <td><span class="badge badge-medium rounded-pill">Medium</span></td>
+      <td>Confirm whether updated <code>notes.medical</code> and <code>notes.indemnity</code> text from ODG v1.2 is authoritative and intentional.</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<!-- =========================================================
+     FINDING 1: Data Gaps
+     ========================================================= -->
+<h2 id="finding-1" class="section-anchor">Finding 1 — ODG API Data Gaps: Valid Codes Returning No Results
+  <span class="badge badge-critical rounded-pill ms-2" style="font-size:13px;">Critical</span>
+</h2>
+
+<p>The following specific ICD-10 and NCCI codes were successfully resolved by the legacy PHP database (returning HTTP 200 with guideline data) but return <strong>no results in ODG v1.2</strong> (HTTP 404). These are not malformed inputs — they are standard or valid code formats. The adapter cannot compensate for missing upstream data.</p>
+
+<div class="finding-card">
+  <strong>Impact:</strong> Customers who submit these codes via the adapter will receive a 404 "no results" response instead of the guideline data they received from the legacy system. This is a live regression for those customers.
+</div>
+
+<h3>1a — UR Advisor: ICD-10 code <code>F40.231</code> returns no results</h3>
+
+<table class="table table-bordered">
+  <thead>
+    <tr><th>Test</th><th>URL</th><th>Legacy Status</th><th>Adapter Status</th><th>ICD Description</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>RMS-ODGWEBSVCS-TEST-37</td>
+      <td><code>/restws/uradvisor/icd/F40.231/cpt/99152</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>Specific phobia, animal type (ICD-10 F40.231). Legacy returned UR Advisor guideline data; ODG v1.2 <code>/tao/icds</code> returns no results for this code.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="finding-card info">
+  <strong>Question for ODG API team:</strong> Should <code>F40.231</code> return UR Advisor guideline data? If yes, please raise a data gap ticket for the <code>/tao/icds</code> endpoint. If this code genuinely has no guidelines, confirm so the adapter's 404 behavior can be accepted and customer communication prepared.
+</div>
+
+<h3>1b — UR Advisor: <code>rescount</code> off by 1 (ICD coverage gap in multi-ICD requests)</h3>
+
+<p>In 3 CityofFortWorth-ODGWEBSVCS tests, the adapter returns one fewer result item than legacy in multi-ICD requests. Both sides return HTTP 200 with data, but the <code>rescount</code> field and the number of ICD results items differ by 1. Legacy resolved an ICD code that ODG v1.2 returns no guideline for.</p>
+
+<table class="table table-bordered">
+  <thead>
+    <tr><th>Test</th><th>Legacy rescount</th><th>Adapter rescount</th><th>Difference</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>CityofFortWorth-ODGWEBSVCS-TEST-3</td><td>7</td><td>6</td><td>1 ICD code in legacy list not resolved by ODG v1.2</td></tr>
+    <tr><td>CityofFortWorth-ODGWEBSVCS-TEST-12</td><td>3</td><td>2</td><td>1 ICD code in legacy list not resolved by ODG v1.2</td></tr>
+    <tr><td>CityofFortWorth-ODGWEBSVCS-TEST-50</td><td>8</td><td>7</td><td>1 ICD code in legacy list not resolved by ODG v1.2</td></tr>
+  </tbody>
+</table>
+
+<div class="finding-card info">
+  <strong>Question for ODG API team:</strong> For each of these 3 tests, the adapter team will provide the specific ICD request list. Please confirm whether the missing code is a v1.2 data gap or an intentional exclusion. If a data gap, raise a ticket to add the missing guideline entry.
+</div>
+
+<h3>1c — Best Practice Guide: ICD-10 code <code>M45.20</code> returns no results</h3>
+
+<table class="table table-bordered">
+  <thead>
+    <tr><th>Test</th><th>URL</th><th>Legacy Status</th><th>Adapter Status</th><th>ICD Description</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>jwsoftware-ODGWEBSVCS-TEST-5</td>
+      <td><code>/restws/bpguide/icd/M45.20</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>Ankylosing spondylitis with cervical involvement (ICD-10 M45.20). Legacy returned BPGuide data; ODG v1.2 <code>/guidelines</code> returns no results.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="finding-card info">
+  <strong>Question for ODG API team:</strong> Should <code>M45.20</code> return Best Practice guideline data? If yes, raise a data gap ticket for the <code>/guidelines</code> endpoint. If this code genuinely has no guidelines in the current clinical model, confirm so the adapter's 404 behavior can be accepted.
+</div>
+
+<h3>1d — Reserve Calculator: NCCI/ICD inputs returning 404 (DXCRM, CBCS)</h3>
+
+<p>3 reserve calculator requests (DXCRM-ODGDEMO: 2 tests, CBCS-ODGWEBSVCS: 1 test) received HTTP 200 with full calculator results from the legacy system, but the adapter returns HTTP 404. These requests contain specific NCCI code and ICD code combinations that the legacy database resolved via its lookup tables, but ODG v1.2 returns no results for.</p>
+
+<table class="table table-bordered">
+  <thead>
+    <tr><th>Customer / Test</th><th>Legacy Status</th><th>Adapter Status</th><th>Input Pattern</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>DXCRM-ODGDEMO-TEST-3</td>
+      <td>200</td>
+      <td>404</td>
+      <td>NCCI/ICD combination not matched by ODG v1.2 <code>/calculator</code></td>
+    </tr>
+    <tr>
+      <td>DXCRM-ODGDEMO-TEST-9</td>
+      <td>200</td>
+      <td>404</td>
+      <td>NCCI/ICD combination not matched by ODG v1.2 <code>/calculator</code></td>
+    </tr>
+    <tr>
+      <td>CBCS-ODGWEBSVCS-TEST-1</td>
+      <td>200</td>
+      <td>404</td>
+      <td>NCCI/ICD combination not matched by ODG v1.2 <code>/calculator</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="finding-card info">
+  <strong>Question for ODG API team:</strong> The adapter team will provide the full request XML for these 3 tests. Please confirm whether the NCCI/ICD inputs should return calculator results. If yes, raise a data coverage gap ticket for the <code>/calculator</code> endpoint.
+</div>
+
+<hr />
+
+<!-- =========================================================
+     FINDING 2: Alert / AlertDesc
+     ========================================================= -->
+<h2 id="finding-2" class="section-anchor">Finding 2 — Alert Color &amp; AlertDesc Fields Not Available in ODG v1.2 Response
+  <span class="badge badge-critical rounded-pill ms-2" style="font-size:13px;">Critical</span>
+</h2>
+
+<p>The legacy calculator APIs returned two types of severity indicator fields inside the adjusted duration response that are currently missing from the adapter:</p>
+
+<ol>
+  <li><strong><code>alert</code></strong> — a color string (<code>yellow</code>, <code>red</code>, <code>green</code>) nested inside each <code>adjustedduration.bp</code>, <code>adjustedduration.cp95</code>, and <code>adjustedduration.cp100</code> object</li>
+  <li><strong><code>alertdesc</code></strong> — a keyed object where the key is the alert color and the value is a descriptive text string, e.g. <code>&lt;alertdesc&gt;&lt;yellow&gt;Consider early intervention...&lt;/yellow&gt;&lt;/alertdesc&gt;</code></li>
+</ol>
+
+<div class="finding-card">
+  <strong>Root cause:</strong> The ODG v1.2 <code>/calculator</code> response either does not include this alert data, or it is present under a field path that has not been identified and documented. The adapter team has not been able to locate the source field for alert color or alert description in the v1.2 API response. Until the source field is confirmed by the ODG API team, the adapter cannot implement this mapping.
+</div>
+
+<h3>2a — Comorbidity Calculator</h3>
+
+<table class="table table-bordered">
+  <thead>
+    <tr><th>Missing Field</th><th>Location in Legacy Response</th><th>Affected Tests</th><th>Example Legacy Value</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>adjustedduration.bp.alert</code></td>
+      <td>Inside <code>&lt;bp&gt;</code> element of <code>&lt;adjustedduration&gt;</code></td>
+      <td>~38 tests</td>
+      <td><code>&lt;alert&gt;yellow&lt;/alert&gt;</code></td>
+    </tr>
+    <tr>
+      <td><code>adjustedduration.cp95.alert</code></td>
+      <td>Inside <code>&lt;cp95&gt;</code> element of <code>&lt;adjustedduration&gt;</code></td>
+      <td>~38 tests</td>
+      <td><code>&lt;alert&gt;yellow&lt;/alert&gt;</code></td>
+    </tr>
+    <tr>
+      <td><code>alertdesc</code></td>
+      <td>Sibling of <code>&lt;adjustedduration&gt;</code></td>
+      <td>38 tests (Averitt, SheakleyUniservice, UnivofMichigan, Zenith)</td>
+      <td><code>&lt;alertdesc&gt;&lt;yellow&gt;Consider early intervention for this case&lt;/yellow&gt;&lt;/alertdesc&gt;</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>2b — Reserve Calculator</h3>
+
+<table class="table table-bordered">
+  <thead>
+    <tr><th>Missing Field</th><th>Location in Legacy Response</th><th>Affected Tests</th><th>Example Legacy Value</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>adjustedduration.bp.alert</code></td>
+      <td>Inside <code>&lt;bp&gt;</code> element of <code>&lt;adjustedduration&gt;</code></td>
+      <td>~20 tests</td>
+      <td><code>&lt;alert&gt;yellow&lt;/alert&gt;</code></td>
+    </tr>
+    <tr>
+      <td><code>adjustedduration.cp95.alert</code></td>
+      <td>Inside <code>&lt;cp95&gt;</code> element</td>
+      <td>~129 tests</td>
+      <td><code>&lt;alert&gt;yellow&lt;/alert&gt;</code></td>
+    </tr>
+    <tr>
+      <td><code>adjustedduration.cp100.alert</code></td>
+      <td>Inside <code>&lt;cp100&gt;</code> element</td>
+      <td>~146 tests</td>
+      <td><code>&lt;alert&gt;yellow&lt;/alert&gt;</code></td>
+    </tr>
+    <tr>
+      <td><code>alertdesc</code></td>
+      <td>Sibling of <code>&lt;adjustedduration&gt;</code></td>
+      <td>~33 tests</td>
+      <td><code>&lt;alertdesc&gt;&lt;yellow&gt;...&lt;/yellow&gt;&lt;/alertdesc&gt;</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="finding-card info">
+  <strong>Questions for ODG API team:</strong>
+  <ol class="mb-0 mt-2">
+    <li>Does the ODG v1.2 <code>/calculator</code> response expose a comorbidity alert color (green/yellow/red) for the adjusted duration bands (bp, cp95, cp100)? If yes, which field path contains it?</li>
+    <li>Does the v1.2 response expose an alert description text per color level? If yes, which field path?</li>
+    <li>If this data is not currently in the v1.2 response, is there a planned API update to include it? What is the timeline?</li>
+    <li>Without this data the adapter will omit these fields. Is that acceptable for go-live, or must they be present?</li>
+  </ol>
+</div>
+
+<hr />
+
+<!-- =========================================================
+     FINDING 3: Actuarial Model Changes
+     ========================================================= -->
+<h2 id="finding-3" class="section-anchor">Finding 3 — Actuarial Model Version Changes: Duration, Risk Scores &amp; Projected Costs Differ Systematically
+  <span class="badge badge-high rounded-pill ms-2" style="font-size:13px;">High Priority</span>
+</h2>
+
+<p>Across all calculator and guideline API tests, the most widespread category of differences involves <strong>calculated numeric values that differ systematically between legacy and ODG v1.2</strong>. These are not bugs in the adapter's data mapping — the adapter faithfully transmits ODG v1.2 values. The differences reflect an updated actuarial model in v1.2 compared to the legacy database.</p>
+
+<div class="finding-card warn">
+  <strong>Why this is a go-live risk:</strong> Legacy customers have calibrated their claim management workflows, internal benchmarks, and SLA thresholds around the legacy numeric values. Without advance notice and ODG's written confirmation that v1.2 values are authoritative, customers may perceive the new values as system errors and reject the migration.
+</div>
+
+<h3>3a — Comorbidity Calculator: Adjusted Duration Days</h3>
+
+<table class="table table-bordered">
+  <thead>
+    <tr><th>Field</th><th>Affected Tests</th><th>Typical Difference</th><th>Pattern</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>adjustedduration.bp.days</code></td>
+      <td>~130 tests</td>
+      <td>5–15% of legacy value</td>
+      <td>ODG v1.2 returns higher or lower adjusted duration days; consistent across Caterpillar, CityofFortWorth, JohnsEastern, MissouriEmployersMut, PSWCA, WindhamGroup, Zenith, paradigm</td>
+    </tr>
+    <tr>
+      <td><code>adjustedduration.cp95.days</code></td>
+      <td>~130 tests</td>
+      <td>5–15% of legacy value</td>
+      <td>Same pattern</td>
+    </tr>
+    <tr>
+      <td><code>adjustedduration.cp100.days</code></td>
+      <td>~130 tests</td>
+      <td>5–15% of legacy value</td>
+      <td>Same pattern</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>3b — Comorbidity Calculator: Risk Assessment Score / Status</h3>
+
+<table class="table table-bordered">
+  <thead>
+    <tr><th>Field</th><th>Affected Tests</th><th>Typical Difference</th><th>Pattern</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>riskassessment.score</code></td>
+      <td>~100 tests</td>
+      <td>10–20 points on 0–100 scale</td>
+      <td>Score shifts cause status tier changes: <code>Yellow (Cautionary)</code> → <code>Green (Moderate)</code> or similar</td>
+    </tr>
+    <tr>
+      <td><code>riskassessment.status</code></td>
+      <td>~100 tests</td>
+      <td>Tier label change</td>
+      <td>Status changes affect how claims are triaged in customer workflows</td>
+    </tr>
+    <tr>
+      <td><code>riskassessment.magnitude</code></td>
+      <td>~100 tests</td>
+      <td>Numeric value change</td>
+      <td>Same pattern</td>
+    </tr>
+    <tr>
+      <td><code>riskassessment.volatility</code></td>
+      <td>~100 tests</td>
+      <td>Numeric value change</td>
+      <td>Same pattern</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>3c — Reserve Calculator: Projected Costs</h3>
+
+<p>This is the most prevalent content difference across the entire test suite — <strong>~266 tests</strong> across 20+ customers show projected cost differences in the expense, medical, indemnity, and total fields across all three duration bands.</p>
+
+<table class="table table-bordered">
+  <thead>
+    <tr><th>Field Path</th><th>Tests with Differences</th><th>Typical Difference</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>projectedcosts.bp.expense</code></td><td>261</td><td>10–30% of legacy dollar amount</td></tr>
+    <tr><td><code>projectedcosts.bp.medical</code></td><td>197</td><td>10–30% of legacy dollar amount</td></tr>
+    <tr><td><code>projectedcosts.bp.indemnity</code></td><td>115</td><td>10–30% of legacy dollar amount</td></tr>
+    <tr><td><code>projectedcosts.bp.total</code></td><td>261</td><td>Derived from above; same magnitude</td></tr>
+    <tr><td><code>projectedcosts.cp95.expense</code></td><td>266</td><td>10–30% of legacy dollar amount</td></tr>
+    <tr><td><code>projectedcosts.cp95.medical</code></td><td>213</td><td>10–30% of legacy dollar amount</td></tr>
+    <tr><td><code>projectedcosts.cp95.indemnity</code></td><td>182</td><td>10–30% of legacy dollar amount</td></tr>
+    <tr><td><code>projectedcosts.cp95.total</code></td><td>266</td><td>Derived from above</td></tr>
+    <tr><td><code>projectedcosts.cp100.expense</code></td><td>265</td><td>10–30% of legacy dollar amount</td></tr>
+    <tr><td><code>projectedcosts.cp100.medical</code></td><td>213</td><td>10–30% of legacy dollar amount</td></tr>
+    <tr><td><code>projectedcosts.cp100.indemnity</code></td><td>185</td><td>10–30% of legacy dollar amount</td></tr>
+    <tr><td><code>projectedcosts.cp100.total</code></td><td>265</td><td>Derived from above</td></tr>
+  </tbody>
+</table>
+
+<h3>3d — Reserve Calculator: Adjusted Duration Days</h3>
+
+<table class="table table-bordered">
+  <thead>
+    <tr><th>Field</th><th>Affected Tests</th><th>Pattern</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>adjustedduration.cp95.days</code></td><td>~136</td><td>5–15% difference; only in tests with fulloutput=Y</td></tr>
+    <tr><td><code>adjustedduration.cp100.days</code></td><td>~136</td><td>Same pattern</td></tr>
+    <tr><td><code>adjustedduration.bp.days</code></td><td>~73</td><td>Same pattern</td></tr>
+  </tbody>
+</table>
+
+<h3>3e — Reserve Calculator: Risk Assessment Score / Status</h3>
+
+<table class="table table-bordered">
+  <thead>
+    <tr><th>Field</th><th>Affected Tests</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>riskassessment.score</code></td><td>~189</td></tr>
+    <tr><td><code>riskassessment.volatility</code></td><td>~148</td></tr>
+    <tr><td><code>riskassessment.magnitude</code></td><td>~136</td></tr>
+    <tr><td><code>riskassessment.status</code></td><td>~59</td></tr>
+  </tbody>
+</table>
+
+<h3>3f — Best Practice Guide: Physical Therapy Visit Count Format</h3>
+
+<table class="table table-bordered">
+  <thead>
+    <tr><th>Test</th><th>ICD</th><th>Field</th><th>Legacy Value</th><th>Adapter (ODG v1.2) Value</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>JohnsEastern-ODGWEBSVCS-TEST-32</td>
+      <td><code>726.10</code></td>
+      <td><code>pt.item[4].visits</code></td>
+      <td><code>1</code></td>
+      <td><code>1-2</code></td>
+    </tr>
+    <tr>
+      <td>MissouriEmployersMut-ODGWEBSVCS-TEST-13</td>
+      <td><code>M75.52</code></td>
+      <td><code>pt.item[4].visits</code></td>
+      <td><code>1</code></td>
+      <td><code>1-2</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="finding-card info">
+  <strong>Questions for ODG API team / Product:</strong>
+  <ol class="mb-0 mt-2">
+    <li>Please confirm in writing that ODG v1.2 duration days, risk assessment scores, and projected cost values represent the <strong>authoritative current clinical model</strong> — not a calculation error or misconfiguration in the v1.2 API.</li>
+    <li>Is there documentation (release notes, model change log) that describes what changed between the legacy model and v1.2? This will be used for customer communication.</li>
+    <li>For projected costs specifically: confirm which actuarial factors (wage indices, geographic adjustments, inflation tables) were updated in v1.2 and whether customers' existing cost benchmarks need recalibration.</li>
+    <li>For risk assessment status tier changes: are the Green/Yellow/Red threshold boundaries the same in v1.2 as in legacy, or were the thresholds also updated?</li>
+    <li>For PT visits (<code>1</code> vs <code>1-2</code> range): confirm whether the range format is the authoritative value. Legacy stored a single integer; v1.2 returns a range string.</li>
+  </ol>
+</div>
+
+<hr />
+
+<!-- =========================================================
+     FINDING 4: Notes Text
+     ========================================================= -->
+<h2 id="finding-4" class="section-anchor">Finding 4 — Clinical Notes Text Changes in Reserve Calculator
+  <span class="badge badge-medium rounded-pill ms-2" style="font-size:13px;">Medium</span>
+</h2>
+
+<p>The <code>notes.medical</code> and <code>notes.indemnity</code> fields in the reserve calculator response contain clinical narrative text. In approximately 17 tests, the text returned by the adapter (sourced from ODG v1.2) differs from the legacy text.</p>
+
+<table class="table table-bordered">
+  <thead>
+    <tr><th>Field</th><th>Affected Tests</th><th>Pattern</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>notes.medical</code></td>
+      <td>~17 tests</td>
+      <td>Clinical narrative text differs — ODG v1.2 appears to use updated or revised clinical notes language compared to the legacy database text.</td>
+    </tr>
+    <tr>
+      <td><code>notes.indemnity</code> sub-fields</td>
+      <td>~3–4 tests</td>
+      <td>Same pattern — indemnity notes text differs.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="finding-card warn">
+  <strong>Why this matters:</strong> Some customers parse or display these notes fields in their claim management systems or reports. If the text has materially changed, customers may need to update their downstream handling.
+</div>
+
+<div class="finding-card info">
+  <strong>Questions for ODG API team / Product:</strong>
+  <ol class="mb-0 mt-2">
+    <li>Confirm whether the clinical notes text returned by ODG v1.2 <code>/calculator</code> is the current authoritative text — i.e., intentionally revised since the legacy database was last updated.</li>
+    <li>If yes, provide a summary of what changed (e.g., "updated medical duration rationale language") so customers can be notified.</li>
+    <li>If this was an unintentional change, identify the correct field or parameter to use to retrieve the same notes text as the legacy system.</li>
+  </ol>
+</div>
+
+<hr />
+
+<!-- =========================================================
+     Summary Action Table
+     ========================================================= -->
+<h2>Consolidated Action Table for ODG API Team</h2>
+
+<table class="table table-bordered">
+  <thead>
+    <tr>
+      <th>Priority</th>
+      <th>Finding</th>
+      <th>Requested Action</th>
+      <th>Blocking Go-Live?</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge badge-critical rounded-pill">Critical</span></td>
+      <td>F40.231 no results — UR Advisor</td>
+      <td>Confirm if data gap; raise ticket if yes</td>
+      <td>Yes — 1 customer affected</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-critical rounded-pill">Critical</span></td>
+      <td>rescount off by 1 — UR Advisor (3 CityofFortWorth tests)</td>
+      <td>Identify which ICD code in each request is missing from v1.2 and confirm data gap</td>
+      <td>Yes — 1 customer affected</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-critical rounded-pill">Critical</span></td>
+      <td>M45.20 no results — Best Practice Guide</td>
+      <td>Confirm if data gap; raise ticket if yes</td>
+      <td>Yes — 1 customer affected</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-critical rounded-pill">Critical</span></td>
+      <td>NCCI/ICD inputs returning 404 — Reserve Calculator (DXCRM ×2, CBCS ×1)</td>
+      <td>Review request inputs; raise data coverage ticket if yes</td>
+      <td>Yes — 2 customers affected</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-critical rounded-pill">Critical</span></td>
+      <td>Alert color / alertdesc fields not available in ODG v1.2 response — both Calculators</td>
+      <td>Identify field path for alert color and alert description text in v1.2; or confirm not available</td>
+      <td>Yes — affects ~71 tests across multiple customers</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-high rounded-pill">High</span></td>
+      <td>Duration days, risk scores, projected costs differ — both Calculators + BPGuide</td>
+      <td>Written confirmation that v1.2 values are authoritative; change log / model notes for customer comms</td>
+      <td>Yes — required before notifying all affected customers</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-medium rounded-pill">Medium</span></td>
+      <td>Clinical notes text changed — Reserve Calculator</td>
+      <td>Confirm whether notes text changes are intentional and authoritative</td>
+      <td>Partial — depends on customer downstream usage of notes fields</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<section style="margin-top: 20px; color: #5E6C84; font-size: 13px;">
+  <h3 style="font-size: 14px; color: #253858; margin-bottom: 8px;">Notes on Scope</h3>
+  <ul>
+    <li>This report covers only findings that require ODG API Development / Product team action. Adapter-internal issues (ICD code sanitization for malformed inputs, error code alignment for validation failures, <code>alertdesc</code> serialization logic once the source field is confirmed) are tracked in the adapter team's backlog and are not included here.</li>
+    <li>OneSearch discrepancies are all improvements (adapter returns broader search coverage than legacy) and require no ODG API team action.</li>
+    <li>The high EXPECTED_DIFF counts for <code>stcode</code> omission across both calculators are confirmed as non-breaking — this is a legacy-internal field not in the published contract.</li>
+    <li>Source discrepancy reports: <code>docs/bpguide-discrepancy-report.html</code>, <code>docs/comorbidity-calculator-discrepancy-report.html</code>, <code>docs/uradvisor-discrepancy-report.html</code>, <code>docs/onesearch-discrepancy-report.html</code>, <code>docs/reserve-calculator-discrepancy-report.html</code>.</li>
+  </ul>
+</section>
+
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
