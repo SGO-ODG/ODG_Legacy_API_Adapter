@@ -13,4 +13,5 @@ dist/
 api-tester/tests-scripts/output/
 .claude/settings.local.json
 tasks/todo.md
+api-tester/tests-scripts/input/01 - TESTS
 
