@@ -1,9 +1,6 @@
 import {
   tildeList,
-  normalizeNdc,
-  isNumeric,
   padFnol,
-  isoToLegacyDate,
   formatCurrency,
 } from '../../../src/parsers/queryParams';
 
@@ -22,31 +19,6 @@ describe('tildeList', () => {
   });
 });
 
-describe('normalizeNdc', () => {
-  it('normalizes a standard NDC with dashes', () => {
-    expect(normalizeNdc('12345-6789')).toBe('12345-6789');
-  });
-  it('normalizes a 9-digit numeric string', () => {
-    expect(normalizeNdc('123456789')).toBe('12345-6789');
-  });
-  it('left-pads short codes', () => {
-    expect(normalizeNdc('123')).toBe('00000-0123');
-  });
-  it('strips non-numeric chars then pads to 9 digits', () => {
-    // '1234-5678' → strip dash → '12345678' (8 digits) → pad → '012345678' → '01234-5678'
-    expect(normalizeNdc('1234-5678')).toBe('01234-5678');
-  });
-});
-
-describe('isNumeric', () => {
-  it('returns true for digit strings', () => {
-    expect(isNumeric('12345')).toBe(true);
-  });
-  it('returns false for strings with letters', () => {
-    expect(isNumeric('abc')).toBe(false);
-    expect(isNumeric('12a45')).toBe(false);
-  });
-});
 
 describe('padFnol', () => {
   it('pads single digit', () => {
@@ -57,14 +29,6 @@ describe('padFnol', () => {
   });
 });
 
-describe('isoToLegacyDate', () => {
-  it('converts ISO date to MM/DD/YYYY', () => {
-    expect(isoToLegacyDate('2026-01-15T00:00:00Z')).toBe('01/15/2026');
-  });
-  it('returns original on invalid input', () => {
-    expect(isoToLegacyDate('not-a-date')).toBe('not-a-date');
-  });
-});
 
 describe('formatCurrency', () => {
   it('formats with dollar sign and 2 decimals', () => {

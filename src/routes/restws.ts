@@ -4,15 +4,6 @@ import { formatSelectorMiddleware, getLegacyFormat } from '../middleware/formatS
 import { sendLegacyResponse, sendLegacyError } from '../serializers/legacyResponse';
 import { LegacyError, ERRORS } from '../errors/legacyErrors';
 import {
-  parseNdcAdvisorParams,
-  handleNdcAdvisor,
-  buildNdcAdvisorModel,
-} from '../transformers/ndcAdvisor';
-import {
-  fetchAllNdcRecords,
-  serializeNdcDownloadCsv,
-} from '../transformers/ndcDownload';
-import {
   parseUraParams,
   handleUrAdvisor,
   buildUraModel,
@@ -30,7 +21,6 @@ import {
   buildOneSearchJsonBody,
 } from '../transformers/oneSearch';
 import { UpstreamError } from '../upstream/odgClient';
-import { appendLegacyMeta } from '../serializers/legacyResponse';
 import { isDebugEnabled } from '../config/env';
 import { usageLoggerMiddleware } from '../middleware/usageLogger';
 
@@ -38,98 +28,6 @@ const router = Router();
 
 // Apply format selector to all restws routes
 router.use(formatSelectorMiddleware);
-
-// ─── NDC Advisor ──────────────────────────────────────────────────────────────
-
-router.get(
-  ['/ndcadvisor', '/ndcadvisor/format/json'],
-  legacyAuthMiddleware('ndcadvisor'),
-  usageLoggerMiddleware(),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const format = getLegacyFormat(res);
-      const ctx = parseNdcAdvisorParams(
-        req.query as Record<string, string | string[] | undefined>,
-      );
-      const result = await handleNdcAdvisor(ctx);
-      const model = buildNdcAdvisorModel(result);
-      sendLegacyResponse(res, model, format);
-    } catch (err) {
-      if (err instanceof LegacyError) {
-        sendLegacyError(res, err.payload);
-        return;
-      }
-      if (err instanceof UpstreamError) {
-        // Never expose upstream details to the caller
-        sendLegacyError(res, ERRORS.NO_RESULTS('NDC codes'));
-        return;
-      }
-      next(err);
-    }
-  },
-);
-
-// 405 for unsupported methods on known resources
-router.post('/ndcadvisor', (_req, res) =>
-  sendLegacyError(res, ERRORS.UNKNOWN_METHOD()),
-);
-
-// ─── NDC Download ─────────────────────────────────────────────────────────────
-
-router.get(
-  ['/ndcdownload', '/ndcdownload/format/json'],
-  legacyAuthMiddleware('ndcdownload'),
-  usageLoggerMiddleware(),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const format = getLegacyFormat(res);
-      const clientid =
-        typeof req.query.clientid === 'string' ? req.query.clientid : undefined;
-
-      // CSV requested if path ends in /format/csv — reject per legacy contract
-      // (ndcdownload CSV is supported only via the plain path, not /format/csv suffix)
-      // CSV detection: Accept header not used; check explicit query or path suffix
-      const wantCsv = req.path.endsWith('/format/csv');
-      if (wantCsv) {
-        sendLegacyError(res, ERRORS.INVALID_FORMAT());
-        return;
-      }
-
-      const records = await fetchAllNdcRecords();
-
-      if (records.length === 0) {
-        sendLegacyError(res, ERRORS.NO_RESULTS('NDC codes'));
-        return;
-      }
-
-      // CSV output: only when requested explicitly via legacy csv path
-      if (format === 'xml' && req.path.endsWith('/format/csv')) {
-        const csv = serializeNdcDownloadCsv(records);
-        res.type('text/csv').send(csv);
-        return;
-      }
-
-      // Build model — array of records, no single-record unwrap for bulk download
-      const model: Record<string, unknown> = { ndc: records };
-      const withMeta = appendLegacyMeta(model, records.length, clientid);
-      sendLegacyResponse(res, withMeta, format);
-    } catch (err) {
-      if (err instanceof LegacyError) {
-        sendLegacyError(res, err.payload);
-        return;
-      }
-      if (err instanceof UpstreamError) {
-        sendLegacyError(res, ERRORS.NO_RESULTS('NDC codes'));
-        return;
-      }
-      next(err);
-    }
-  },
-);
-
-router.post('/ndcdownload', (_req, res) =>
-  sendLegacyError(res, ERRORS.UNKNOWN_METHOD()),
-);
 
 // ─── UR Advisor ───────────────────────────────────────────────────────────────
 
