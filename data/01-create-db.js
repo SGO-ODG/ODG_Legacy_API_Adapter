@@ -1,11 +1,31 @@
 /**
  * 01-create-db.js
- * Creates the two required tables in the PostgreSQL database.
+ * Creates the three required tables in the PostgreSQL database.
  * Safe to re-run — uses CREATE TABLE IF NOT EXISTS.
  *
  * Reads connection settings from .env (PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_SSL).
  *
  * Usage: node data/01-create-db.js
+ *
+ * Azure deployment:
+ *   Run this script ONCE against the Azure Database for PostgreSQL Flexible Server
+ *   after the server and database are provisioned by Terraform. It is NOT a runtime
+ *   dependency and must NOT run on every application startup.
+ *
+ *   Terraform pattern — run as a one-time provisioner after the server is ready:
+ *     resource "null_resource" "create_db_schema" {
+ *       provisioner "local-exec" {
+ *         command = "node data/01-create-db.js"
+ *         environment = {
+ *           PG_HOST     = azurerm_postgresql_flexible_server.<name>.fqdn
+ *           PG_DATABASE = azurerm_postgresql_flexible_server_database.<name>.name
+ *           PG_USER     = azurerm_postgresql_flexible_server.<name>.administrator_login
+ *           PG_PASSWORD = "<from Key Vault>"
+ *           PG_SSL      = "true"
+ *         }
+ *       }
+ *       depends_on = [azurerm_postgresql_flexible_server_database.<name>]
+ *     }
  */
 
 'use strict';
