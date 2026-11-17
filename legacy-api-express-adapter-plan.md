@@ -2,7 +2,7 @@
 
 ## Summary
 
-Build a Node.js/Express service on a parallel hostname that exposes the existing CodeIgniter routes unchanged, validates `X-ODG-KEY` against the legacy subscription model (using local read-only SQLite during initial development), calls ODG API v1.2 using cached OAuth client-credentials tokens, and converts upstream responses into the current legacy wire format.
+Build a Node.js/Express service on a parallel hostname that exposes the existing CodeIgniter routes unchanged, validates `X-ODG-KEY` against the legacy subscription model (PostgreSQL — companymaster, companywebservice, webserviceusage), calls ODG API v1.2 using cached OAuth client-credentials tokens, and converts upstream responses into the current legacy wire format.
 
 The Express project is maintained in a separate Git repository. Keep this PHP checkout at `C:\Saurabh\MyApps\Apache24\odgci_3.1.11` as a read-only development/reference checkout; configure it in the Express repository through `LEGACY_PHP_REFERENCE_ROOT`. Never require this path at runtime.
 
@@ -11,11 +11,11 @@ First release covers: NDC Advisor, NDC Download, UR Advisor, Best Practice Guide
 ## Implementation changes
 
 - Preserve legacy route, HTTP method, XML POST payload, `X-ODG-KEY`, response status, and error body. Return XML for every legacy request by default; return JSON only when the path ends in `/format/json`. Do not select output from `Accept`, extensions, query parameters, or any other format negotiation.
-- Implement legacy authorization using only `companymaster` and `companywebservice`: look up `webserviceKey`, reject `disabled=Y`, validate the requested service subscription and its start/end dates, and derive subscription `outputMode`. Use a static legacy-service registry for the supported migrated routes; do not depend on `webservicemaster`, implement a maintenance state, or write to `webserviceusage`.
+- Implement legacy authorization using `companymaster` and `companywebservice`: look up `webserviceKey`, reject `disabled=Y`, validate the requested service subscription and its start/end dates, and derive subscription `outputMode`. Use a static legacy-service registry for the supported migrated routes; do not depend on `webservicemaster` or implement a maintenance state. `webserviceusage` is a write-only usage log table populated by the usage logger middleware (fire-and-forget, controlled by `USAGE_LOGGING_ENABLED`).
 - Implement a legacy error-response layer before every upstream call. It must preserve the `RestController` HTTP status, `error` property, and exact error text for key, service, subscription, method, request-format, XML-validation, and endpoint no-result failures; never expose OAuth or upstream error bodies.
 - Add a database access layer with parameterized, read-only authentication/subscription queries only. Do not implement a usage-log writer or any database write path. Keep database and OAuth credentials solely in environment/secret configuration.
-- For initial development, use a local SQLite database opened in read-only mode and containing only `companymaster` and `companywebservice`. When the Express repository is created, add a placeholder-only `.env.example` with `SQLITE_DATABASE_PATH` and ignore the populated `.env`; do not reuse or commit PHP database credentials.
-- Add a per-customer OAuth client-credentials client configured through `OAUTH_TOKEN_URL`, audience, scopes, and upstream API version (`X-ApiVersion: 1.2`). After legacy validation, use the matching company `odgapiClientId` and `odgapiClientSecret`; cache one bearer token per customer/token audience/scope until shortly before the token response `expires_in` value (for example 3600 or 7200 seconds). Coalesce concurrent refreshes for the same cache key; invalidate and refresh once on an upstream 401, then retry once.
+- Connect to a PostgreSQL database using `PG_*` environment variables. Add a placeholder-only `.env.example` and ignore the populated `.env`; do not reuse or commit PHP database credentials. Run `data/01-create-db.js` once to create the three tables.
+- Add a shared OAuth client-credentials client configured through `OAUTH_TOKEN_URL`, audience, scopes, and upstream API version (`X-ApiVersion: 1.2`). After legacy validation, use the shared `ODG_API_CLIENT_ID` and `ODG_API_CLIENT_SECRET` from environment configuration — credentials are not stored per-company in the database. Cache one bearer token (keyed on token URL, client ID, audience, scopes) until shortly before the `expires_in` value (for example 3600 or 7200 seconds). Coalesce concurrent refreshes for the same cache key; invalidate and refresh once on an upstream 401, then retry once.
 - Implement declarative request/response transformers:
   - `ndcadvisor` and `ndcdownload` -> `/formulary/ndc` or `/formulary/ndc/{ndcCode}`; use `/formulary/pbs` for the existing Australian/PBS behavior; page through NDC results for downloads.
   - `uradvisor` -> `/tao/icds` (ICD-driven), `/tao/procedures` (icd=9|10 reverse lookup with `resulttype=1`/`2`), or `/tao/fnol/{bp}/{noi}` (FNOL-only). FNOL response (`items[].taoDataItems[]`) is used directly without a secondary `/tao/icds` call. ICD requests with no results fall back to FNOL when `bp`/`noi` are also provided. AU uses `proc` key; subscription `outputMode=F` maps to `FullOutput=1`.
@@ -33,12 +33,12 @@ First release covers: NDC Advisor, NDC Download, UR Advisor, Best Practice Guide
 - Manually validate every supported endpoint, including the `/restws/bpguide` to `/guidelines` transformation, with representative valid, invalid, unauthorized, disabled, expired, unsubscribed, no-result, malformed-XML, and upstream-failure requests in XML, JSON, and CSV/output-format variants.
 - Compare status, content type, XML element names/order, JSON key casing, arrays, dates/numbers, echoed `clientid`, and error text against the PHP API for each test request.
 - Use `application/controllers/Restws.php`, `application/controllers/Calculator.php`, `application/libraries/RestController.php`, and the relevant models from the reference checkout to resolve contract details not captured by fixtures or the mapping review.
-- Provide health/readiness checks for the two database tables, per-customer token acquisition, and upstream reachability; do not write local usage or audit records; database access is read-only and ODG API logs are the audit source.
+- Provide health/readiness checks for the database tables, token acquisition, and upstream reachability. Usage records are written to webserviceusage via usageLoggerMiddleware when `USAGE_LOGGING_ENABLED=Y`. ODG API logs are the primary audit source.
 - Deploy on the parallel hostname with PHP remaining authoritative. Move traffic only through explicit gateway/DNS configuration after manual parity sign-off, while retaining an immediate route-back to PHP.
 
 ## Assumptions
 
 - The new API exposes a client-credentials token endpoint; its URL and credentials are delivered as deployment secrets.
 - API v1.2 is the fixed upstream contract for this adapter.
-- Only `companymaster` and `companywebservice` are available to the Node service; `webservicemaster` and `webserviceusage` are not.
-- Legacy customers continue to use only `X-ODG-KEY`; no new customer OAuth requirement is introduced. OAuth client credentials are selected from the validated customer record.
+- `companymaster` and `companywebservice` are read-only validation tables; `webserviceusage` is a write-only usage log table; `webservicemaster` is not used.
+- Legacy customers continue to use only `X-ODG-KEY`; no new customer OAuth requirement is introduced. OAuth client credentials (`ODG_API_CLIENT_ID` / `ODG_API_CLIENT_SECRET`) are shared across all companies and stored in environment configuration, not in the database.

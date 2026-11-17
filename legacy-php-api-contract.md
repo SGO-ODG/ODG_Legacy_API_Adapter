@@ -9,9 +9,9 @@ For the separate Express repository, retain this PHP checkout as a local referen
 The new Express application has access only to `companymaster` and `companywebservice`.
 
 - Validate the legacy key with `companymaster.webserviceKey`; reject `companymaster.disabled = Y`.
-- Read `companymaster.odgapiClientId` and `companymaster.odgapiClientSecret` only after validation, and use them to obtain an OAuth token for that company.
 - Validate the requested legacy service, subscription dates, and `outputMode` with `companywebservice`.
-- Do not use `webservicemaster` or write to `webserviceusage`; use static route configuration only; database access is read-only and no local API-call audit or usage writer is used. ODG API logs are the audit source. This temporary bridge supports only existing subscribed customers and provides no maintenance mode, customer provisioning, or subscription provisioning.
+- OAuth credentials are shared across all companies via `ODG_API_CLIENT_ID` and `ODG_API_CLIENT_SECRET` in environment configuration. `companymaster` does not hold per-company OAuth credentials.
+- Do not use `webservicemaster`. `webserviceusage` is a write-only table populated by `usageLoggerMiddleware` after each authenticated request (controlled by `USAGE_LOGGING_ENABLED`). `companymaster` and `companywebservice` are read-only. ODG API logs are the primary audit source. This temporary bridge supports only existing subscribed customers and provides no maintenance mode, customer provisioning, or subscription provisioning.
 ## Lifecycle and new-API mapping decisions
 
 | Legacy endpoint | Status | New ODG API mapping |

@@ -11,7 +11,7 @@ X-ODG-KEY: <legacy-customer-key>
 <no Accept header is used for legacy response format selection>
 ```
 
-The adapter validates the legacy key, account status, service availability, subscription dates, and subscription output mode using the existing MySQL tables. Customers do **not** send OAuth tokens.
+The adapter validates the legacy key, account status, service availability, subscription dates, and subscription output mode using the existing PostgreSQL tables. Customers do **not** send OAuth tokens.
 
 ### New ODG request
 
@@ -29,15 +29,15 @@ Only these tables are available to the Express application:
 
 | Table | Used for |
 |---|---|
-| `companymaster` | Find the customer by `webserviceKey`; reject `disabled=Y`; select that customer's `odgapiClientId` and `odgapiClientSecret` for OAuth client credentials. |
+| `companymaster` | Find the customer by `webserviceKey`; reject `disabled=Y`; authenticate the customer. Company no longer holds OAuth credentials. |
 | `companywebservice` | Validate `companyCode` plus legacy `webserviceCode`; enforce `subscriptionStartDate`/`subscriptionEndDate`; read `outputMode`. |
 
-The service code is supplied by a static route registry in Express. This temporary bridge supports only already subscribed customers and performs no customer/subscription provisioning. It has no maintenance mode; no local API-call audit or usage writer is used because `webserviceusage` is unavailable. Database access is read-only; ODG API logs are the audit source.
+The service code is supplied by a static route registry in Express. This temporary bridge supports only already subscribed customers and performs no customer/subscription provisioning. It has no maintenance mode. `webserviceusage` is a write-only usage log table (populated by `usageLoggerMiddleware`). `companymaster` and `companywebservice` are read-only; ODG API logs are the primary audit source.
 ## Per-customer OAuth token reuse
 
-After legacy key and subscription validation, obtain an OAuth client-credentials token using that company's `odgapiClientId` and `odgapiClientSecret`. Do **not** request a token for every legacy request.
+After legacy key and subscription validation, obtain an OAuth client-credentials token using the shared `ODG_API_CLIENT_ID` and `ODG_API_CLIENT_SECRET` from environment configuration. Do **not** request a token for every legacy request.
 
-- Cache key: a non-secret deterministic key for `companyCode`, token URL, client ID identifier, audience, and scopes.
+- Cache key: a non-secret deterministic key built from token URL, client ID identifier, audience, and scopes (no `companyCode` — credentials are shared).
 - Cache value: bearer token and calculated expiry; never log or return either the token or client secret.
 - Expiry: use OAuth `expires_in` (for example 3600 or 7200 seconds) and refresh before expiry using a bounded safety skew, such as 60 seconds or 10% of the token lifetime, whichever is smaller.
 - Concurrency: one in-flight token request per cache key; concurrent legacy requests await that result rather than issuing duplicate token requests.
@@ -553,10 +553,7 @@ These cross-cutting rules apply to all legacy output (both XML and JSON) and mus
 | `POST /restws/procsum` | End of life. Do not map to a new ODG endpoint or implement in Express. |
 | `GET /restws/sumguide` | End of life. Do not map to a new ODG endpoint or implement in Express. |
 
-## Manual-review checklist
+## Manual-review checklist — RESOLVED
 
-- Confirm OAuth token URL, audience, scopes, and client credentials secret source.
-- Confirm query-array serialization for `/formulary/*`, `/guidelines`, `/tao/*`, and `/search`.
-- Provide sample successful and error responses for every mapped new endpoint, especially `/search`, `/guidelines`, and `/tao/*`.
-- Approve or revise every `TODO / confirm` mapping before Express implementation.
-- Decide exact customer-facing EOL behavior for Procedure Summary and Summary Guide during/after PHP retirement.
+All mapping questions have been resolved during implementation. The adapter is in production.
+See CLAUDE.md for the current authoritative state of all mapping decisions.
