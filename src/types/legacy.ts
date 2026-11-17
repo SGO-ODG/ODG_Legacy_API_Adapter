@@ -1,36 +1,6 @@
 /** Legacy response format selected by /format/json suffix. */
 export type LegacyFormat = 'xml' | 'json';
 
-// ─── NDC Advisor ─────────────────────────────────────────────────────────────
-
-export interface LegacyNdcRecord {
-  ndcCode: string;
-  brandName: string;
-  genericName: string;
-  tradeName: string;
-  drugClass: string;
-  /** TODO/confirm: not yet mapped from formularyInformation */
-  GE?: string | null;
-  /** TODO/confirm: not yet mapped from formularyInformation */
-  status?: string | null;
-  strength: string;
-  effectiveDate: string; // MM/DD/YYYY
-}
-
-export interface LegacyPbsRecord {
-  pbsCode: string;
-  brandName: string;
-  atcCode: string;
-  manufacCode: string;
-  drugMPName: string;
-  amtMppReferredTerm: string;
-  /** TODO/confirm: not top-level in Swagger PbsInfo */
-  drugClass?: string | null;
-  odgGenericName?: string | null;
-  odgGenericEquiv?: string | null;
-  odgStatus?: string | null;
-}
-
 // ─── UR Advisor ──────────────────────────────────────────────────────────────
 
 export interface LegacyCptRecord {

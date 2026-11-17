@@ -57,10 +57,10 @@ const KEY_PAYLOADS = [
 ];
 
 const COMPANY_CODE_PAYLOADS: [string, string][] = [
-  ["1' OR '1'='1",                            'NDCADVISOR'],
-  ["'; DROP TABLE companywebservice; --",      'NDCADVISOR'],
-  ["' UNION SELECT * FROM companywebservice --", 'NDCADVISOR'],
-  ["' OR 1=1 --",                              'NDCADVISOR'],
+  ["1' OR '1'='1",                            'BPGUIDE'],
+  ["'; DROP TABLE companywebservice; --",      'BPGUIDE'],
+  ["' UNION SELECT * FROM companywebservice --", 'BPGUIDE'],
+  ["' OR 1=1 --",                              'BPGUIDE'],
 ];
 
 const WEBSERVICE_CODE_PAYLOADS: [string, string][] = [
@@ -75,7 +75,7 @@ const VALID_COMPANY: CompanyRow = {
 };
 
 const VALID_SUB: SubscriptionRow = {
-  id: 1, companyCode: 'ACME', webserviceCode: 'NDCADVISOR',
+  id: 1, companyCode: 'ACME', webserviceCode: 'BPGUIDE',
   subscriptionStartDate: '2020-01-01', subscriptionEndDate: '2099-12-31', outputMode: 'F',
 };
 
@@ -160,7 +160,7 @@ describe('HTTP X-ODG-KEY header — SQL injection must return 403, never bypass 
     'returns 403 (not an auth bypass) when X-ODG-KEY contains: %s',
     async (payload) => {
       const res = await request(app)
-        .get('/restws/ndcadvisor?ndc=12345-6789')
+        .get('/restws/bpguide?icd=724.2')
         .set('X-ODG-KEY', payload);
       expect(res.status).toBe(403);
       expect(res.text).toContain('<error>Invalid web service key.</error>');
@@ -171,7 +171,7 @@ describe('HTTP X-ODG-KEY header — SQL injection must return 403, never bypass 
     // Auth passes; the upstream ODG call will fail (not mocked here) producing
     // a non-403 status — anything other than 403 confirms auth was not blocked.
     const res = await request(app)
-      .get('/restws/ndcadvisor?ndc=12345-6789')
+      .get('/restws/bpguide?icd=724.2')
       .set('X-ODG-KEY', 'valid-key');
     expect(res.status).not.toBe(403);
   });

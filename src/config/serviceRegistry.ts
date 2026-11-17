@@ -1,12 +1,10 @@
 /**
  * Static registry mapping legacy URL path segments to webserviceCodes.
- * Only the 7 migrated routes are listed here. EOL routes (procsum, sumguide)
- * are intentionally absent — they will never match and will produce a
- * SERVICE_NOT_EXIST error.
+ * Only the 5 active migrated routes are listed here. All other routes
+ * (ndcadvisor, ndcdownload, procsum, sumguide) are intentionally absent —
+ * they will never match and will produce a SERVICE_NOT_EXIST error.
  */
 export const SERVICE_REGISTRY: Record<string, string> = {
-  ndcadvisor: 'NDCADVISOR',
-  ndcdownload: 'NDCDOWNLOAD',
   uradvisor: 'URADVISOR',
   bpguide: 'BPGUIDE',
   onesearch: 'ONESEARCH',

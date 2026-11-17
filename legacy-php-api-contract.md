@@ -18,33 +18,9 @@ The new Express application has access only to `companymaster` and `companywebse
 |---|---|---|
 | `POST /restws/procsum` | End of life | No Express implementation or replacement mapping. |
 | `GET /restws/sumguide` | End of life | No Express implementation or replacement mapping. |
+| `GET /restws/ndcadvisor` | Removed from scope | No longer implemented in Express; returns 403 SERVICE_NOT_EXIST. |
+| `GET /restws/ndcdownload` | Removed from scope | No longer implemented in Express; returns 403 SERVICE_NOT_EXIST. |
 | `GET /restws/bpguide` | Supported | `GET /guidelines`; transform the new response to the legacy Best Practice Guide shape. |
-
-## GET `/restws/ndcadvisor`
-
-| Parameter | Required | Behavior |
-|---|---:|---|
-| `ndc` | Yes | NDC/PBS code(s), `~` separated. Numeric US values normalize to `NNNNN-NNNN`; alphabetic values are keyword searches. `all` returns 404. |
-| `country` | No | `AU` switches to PBS; otherwise US NDC. |
-| `output` | No | `F` adds `procsummary` for a direct US NDC lookup; in AU returns the fuller PBS record. |
-| `clientid` | No | Echoed in response. |
-| output format | No | CSV is rejected. |
-
-US NDC record fields: `ndcCode`, `brandName`, `genericName`, `tradeName`, `drugClass`, `GE`, `status`, `strength`, `effectiveDate`; full mode may add `procsummary`.
-
-AU/PBS compact fields: `pbsCode`, `drugClass`, `odgGenericName`, `odgGenericEquiv`, `odgStatus`, `atcCode`, `manufacCode`, `brandName`, `drugMPName`, `amtMppReferredTerm`. The full PBS response returns database columns except `cost` and `id`.
-
-The response is a single record for one match or an array for multiple matches, plus `rescount` and optional `clientid`.
-
-## GET `/restws/ndcdownload`
-
-Optional query parameter: `clientid`.
-
-Returns every NDC record with: `ndcCode`, `brandName`, `genericName`, `tradeName`, `drugClass`, `GE`, `status`, `strength`, `effectiveDate`.
-
-CSV is supported. When `clientid` is supplied, the legacy output also adds `rescount` and `clientid`.
-
-Adapter implementation pages through `/formulary/ndc` using `pageSize=100` and repeats until `totalRecords` are collected, then returns the full unpaginated array.
 
 ## GET `/restws/uradvisor`
 

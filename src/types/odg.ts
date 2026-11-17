@@ -1,46 +1,6 @@
 // ODG API v1.2 response shapes (based on mapping review + Swagger)
 // Fields are camelCase as returned by the upstream JSON API.
 
-// ─── Formulary: NDC ──────────────────────────────────────────────────────────
-
-export interface OdgNdcInfo {
-  productNdc?: string;
-  odgNdcCode?: string;
-  strength?: string;
-  tradeName?: string;
-  effectiveDate?: string;        // ISO 8601
-  proprietaryName?: string;      // brandName
-  nonProprietaryName?: string;   // genericName
-  pharmClasses?: string;         // drugClass
-  formularyInformation?: unknown[];
-}
-
-export interface OdgNdcResponse {
-  page?: number;
-  pageSize?: number;
-  totalRecords?: number;
-  ndcInformation?: OdgNdcInfo[];
-}
-
-// ─── Formulary: PBS ──────────────────────────────────────────────────────────
-
-export interface OdgPbsInfo {
-  pbsCode?: string;
-  brandName?: string;
-  atcCode?: string;
-  manufacCode?: string;
-  drugMpName?: string;
-  amtMppPreferredTerm?: string;
-  formularyInformation?: unknown[];
-}
-
-export interface OdgPbsResponse {
-  page?: number;
-  pageSize?: number;
-  totalRecords?: number;
-  pbsInformation?: OdgPbsInfo[];
-}
-
 // ─── TAO: UR Advisor ─────────────────────────────────────────────────────────
 
 export interface OdgTaoIcd {

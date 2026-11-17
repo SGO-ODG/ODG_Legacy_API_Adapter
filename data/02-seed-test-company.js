@@ -24,10 +24,8 @@ const COMPANY = {
   disabled:     'N',
 };
 
-// All 7 supported legacy services; outputMode 'F' = full output
+// All 5 active legacy services; outputMode 'F' = full output
 const SUBSCRIPTIONS = [
-  { webserviceCode: 'NDCADVISOR',  outputMode: 'F' },
-  { webserviceCode: 'NDCDOWNLOAD', outputMode: 'F' },
   { webserviceCode: 'URADVISOR',   outputMode: 'F' },
   { webserviceCode: 'BPGUIDE',     outputMode: 'F' },
   { webserviceCode: 'ONESEARCH',   outputMode: 'F' },

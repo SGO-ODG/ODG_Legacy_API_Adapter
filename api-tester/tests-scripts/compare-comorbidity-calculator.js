@@ -521,8 +521,9 @@ async function callApi(url, xmlBody, apiKey, label) {
 async function processRow(row) {
   const { test_name, url_path, xml_body } = row;
 
-  const legacyUrl  = LEGACY_BASE  + url_path;
-  const adapterUrl = ADAPTER_BASE + url_path;
+  const sep = (p) => p.startsWith("/") ? p : "/" + p;
+  const legacyUrl  = LEGACY_BASE  + sep(url_path);
+  const adapterUrl = ADAPTER_BASE + sep(url_path);
 
   const testMeta = {
     test_name,

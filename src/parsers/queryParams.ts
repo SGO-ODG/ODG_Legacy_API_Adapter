@@ -43,20 +43,6 @@ export function tildeList(val: string | undefined): string[] {
 }
 
 /**
- * Normalizes a US NDC code to `NNNNN-NNNN` format.
- * Strips non-numeric characters, left-pads to 9 digits, then inserts a dash
- * after the 5th digit.
- *
- * Returns an empty string if the result would not be 9 digits.
- */
-export function normalizeNdc(code: string): string {
-  const digits = code.replace(/\D/g, '');
-  const padded = digits.padStart(9, '0');
-  if (padded.length !== 9) return '';
-  return `${padded.slice(0, 5)}-${padded.slice(5)}`;
-}
-
-/**
  * Formats a procsummary NDC code to `NNNNN-NNNN` format, matching legacy PHP logic.
  * Step 1: strip all non-digit characters.
  * Step 2: if the result is exactly 9 or 11 digits, format as NNNNN-NNNN (first 9 digits).
@@ -68,13 +54,6 @@ export function formatNdcProcCode(code: string): string {
     return `${digits.slice(0, 5)}-${digits.slice(5, 9)}`;
   }
   return digits;
-}
-
-/**
- * Returns true if a string consists entirely of digits (after trimming).
- */
-export function isNumeric(val: string): boolean {
-  return /^\d+$/.test(val.trim());
 }
 
 /**
@@ -93,23 +72,6 @@ export function formatLegacyDate(d: Date): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   const yyyy = d.getFullYear();
-  return `${mm}/${dd}/${yyyy}`;
-}
-
-/**
- * Parses an ISO 8601 date string (e.g. `2026-01-15T00:00:00Z` or `2026-01-15`)
- * and returns it formatted as `MM/DD/YYYY`.
- *
- * Extracts the date portion directly from the string to avoid UTC→local
- * timezone conversions shifting the day.  Returns the original string on
- * parse failure.
- */
-export function isoToLegacyDate(iso: string): string {
-  if (!iso) return iso;
-  // Match YYYY-MM-DD at the start of the string
-  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!match) return iso;
-  const [, yyyy, mm, dd] = match;
   return `${mm}/${dd}/${yyyy}`;
 }
 

@@ -27,17 +27,17 @@ When the written contract does not settle an edge case, inspect the read-only PH
 
 ## Supported and excluded APIs
 
-Implement these legacy customer-facing routes with the same public path, HTTP method, inputs, status codes, and output format:
+These are the 5 active legacy customer-facing routes implemented in the Express adapter:
 
 | Legacy route | Method | New ODG v1.2 target |
 |---|---:|---|
-| `/restws/ndcadvisor` | GET | `/formulary/ndc`, `/formulary/ndc/{ndcCode}`, `/formulary/pbs`, or `/formulary/pbs/{pbsCode}` |
-| `/restws/ndcdownload` | GET | paged `/formulary/ndc` |
 | `/restws/uradvisor` | GET | `/tao/icds`; confirm `/tao/procedures` and `/tao/fnol` branches |
 | `/restws/bpguide` | GET | `/guidelines` |
 | `/restws/onesearch` | POST XML | `/search` |
 | `/calculator/comorbidity` | POST XML | `/calculator` |
 | `/calculator/reserve` | POST XML | `/calculator` |
+
+Removed from scope: `GET /restws/ndcadvisor` and `GET /restws/ndcdownload` — no longer implemented in Express; return SERVICE_NOT_EXIST (403) for any request.
 
 Explicitly end of life: `POST /restws/procsum` and `GET /restws/sumguide`. Do not approximate them with `/search` or `/guidelines`; retain PHP routing only for the agreed retirement period, then use the approved EOL gateway behavior.
 
@@ -166,8 +166,6 @@ The previous PHP maintenance response (`Web service is down for maintenance.`) i
 
 ## Important mapping rules and known gaps
 
-- NDC Advisor: normalize numeric input to `NNNNN-NNNN`; direct NDC uses `/formulary/ndc/{ndcCode}`, lists/keyword use `/formulary/ndc`, and `country=AU` uses PBS endpoints. `GE`, `status` (US) and `drugClass`, `odgGenericName`, `odgGenericEquiv`, `odgStatus` (AU PBS) are not available in the ODG v1.2 response — returned as null pending confirmation.
-- NDC Download: fetch all `/formulary/ndc` pages (`pageSize=100`) and return the unpaginated legacy record array. Confirm upstream maximum pageSize and ordering guarantee.
 - UR Advisor: ICD-driven → `/tao/icds`; `icd=9|10` reverse lookup → `/tao/procedures?resulttype=1` (ICD9) or `resulttype=2` (ICD10); FNOL-only → `/tao/fnol/{bp}/{noi}` (full TAO data returned directly, no secondary call). ICD requests with no results fall back to FNOL when `bp`/`noi` are present. Subscription `outputMode=F` → `FullOutput=1`. AU uses `proc` key.
 - Best Practice Guide: map ICD-9/ICD-10 arrays to `/guidelines` (split by ICD family: letter-prefix = ICD-10); FNOL resolves via `/tao/fnol` → `data.icds[]`. Field mappings confirmed: `bestPracticeGuidelines[].{pathway,minDays,maxDays}`, `activityModifiers[].{jobType,jobModification}`, `physicalTherapyVisits[]/chiropractorVisits[].{pathway,visits,weeks}`.
 - One Search: map XML `text` to `/search?query=...`; confirmed `type` values: `icd9search`, `icd10search`, `procedurescpt`, `formularyndc`, `treatment`. Result items by section: CPT → `procedureCode`, ICD → `icdCode`, PROCT → `primaryChapter`.
