@@ -1,29 +1,27 @@
 /**
  * 02-seed-test-company.js
- * Inserts (or replaces) a test company and its full service subscriptions.
+ * Inserts (or updates) a test company and its full service subscriptions.
  *
  * Edit the COMPANY block below before running.
  * The webserviceKey matches the key pre-filled in the api-tester HTML pages.
+ *
+ * Reads connection settings from .env (PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_SSL).
  *
  * Usage: node data/02-seed-test-company.js
  */
 
 'use strict';
 
-const path = require('path');
-const Database = require('better-sqlite3');
-
-const DB_PATH = path.resolve(__dirname, 'legacy-subscriptions.sqlite');
+require('dotenv').config();
+const { Client } = require('pg');
 
 // ─── Edit these values ────────────────────────────────────────────────────────
 
 const COMPANY = {
-  companyCode:        'ODG',
-  companyName:        'ODGByMCG',
-  webserviceKey:      'e3cf1a3d593197bd7d2aa91afc1f9ffd5add2cd5',
-  disabled:           'N',
-  odgapiClientId:     'odg_integration',
-  odgapiClientSecret: 'F66F5117-7BA9-475A-B16B-F6BDB70A9D8D',
+  companyCode:  'ODG',
+  companyName:  'ODGByMCG',
+  webserviceKey: 'e3cf1a3d593197bd7d2aa91afc1f9ffd5add2cd5',
+  disabled:     'N',
 };
 
 // All 7 supported legacy services; outputMode 'F' = full output
@@ -42,35 +40,48 @@ const SUBSCRIPTION_END   = '2030-12-31';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const db = new Database(DB_PATH);
+const client = new Client({
+  host:     process.env.PG_HOST,
+  port:     Number(process.env.PG_PORT) || 5432,
+  database: process.env.PG_DATABASE,
+  user:     process.env.PG_USER,
+  password: process.env.PG_PASSWORD,
+  ssl:      process.env.PG_SSL === 'true' ? { rejectUnauthorized: false } : false,
+});
 
-db.prepare(`
-  INSERT OR REPLACE INTO companymaster
-    (companyCode, companyName, webserviceKey, disabled, odgapiClientId, odgapiClientSecret)
-  VALUES (?, ?, ?, ?, ?, ?)
-`).run(
-  COMPANY.companyCode,
-  COMPANY.companyName,
-  COMPANY.webserviceKey,
-  COMPANY.disabled,
-  COMPANY.odgapiClientId,
-  COMPANY.odgapiClientSecret,
-);
-console.log('Upserted company:', COMPANY.companyCode, '-', COMPANY.companyName);
+(async () => {
+  await client.connect();
+  console.log(`Connected to PostgreSQL: ${process.env.PG_HOST}/${process.env.PG_DATABASE}`);
 
-// Remove existing subscriptions for this company then re-insert
-db.prepare('DELETE FROM companywebservice WHERE companyCode = ?').run(COMPANY.companyCode);
+  // Upsert company — insert or update on conflict
+  await client.query(
+    `INSERT INTO companymaster (companyCode, companyName, webserviceKey, disabled)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (companyCode) DO UPDATE SET
+       companyName   = EXCLUDED.companyName,
+       webserviceKey = EXCLUDED.webserviceKey,
+       disabled      = EXCLUDED.disabled`,
+    [COMPANY.companyCode, COMPANY.companyName, COMPANY.webserviceKey, COMPANY.disabled],
+  );
+  console.log('Upserted company:', COMPANY.companyCode, '-', COMPANY.companyName);
 
-const insertSub = db.prepare(`
-  INSERT INTO companywebservice
-    (companyCode, webserviceCode, subscriptionStartDate, subscriptionEndDate, outputMode)
-  VALUES (?, ?, ?, ?, ?)
-`);
+  // Remove existing subscriptions for this company then re-insert
+  await client.query('DELETE FROM companywebservice WHERE companyCode = $1', [COMPANY.companyCode]);
 
-for (const sub of SUBSCRIPTIONS) {
-  insertSub.run(COMPANY.companyCode, sub.webserviceCode, SUBSCRIPTION_START, SUBSCRIPTION_END, sub.outputMode);
-  console.log('  Subscribed:', sub.webserviceCode, `(outputMode=${sub.outputMode})`);
-}
+  for (const sub of SUBSCRIPTIONS) {
+    await client.query(
+      `INSERT INTO companywebservice
+         (companyCode, webserviceCode, subscriptionStartDate, subscriptionEndDate, outputMode)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [COMPANY.companyCode, sub.webserviceCode, SUBSCRIPTION_START, SUBSCRIPTION_END, sub.outputMode],
+    );
+    console.log('  Subscribed:', sub.webserviceCode, `(outputMode=${sub.outputMode})`);
+  }
 
-db.close();
-console.log('Done.');
+  await client.end();
+  console.log('Done.');
+})().catch((err) => {
+  console.error('Error:', err.message);
+  client.end();
+  process.exit(1);
+});
