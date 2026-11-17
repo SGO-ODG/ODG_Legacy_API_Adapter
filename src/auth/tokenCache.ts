@@ -7,6 +7,14 @@ interface CacheEntry {
   expiresIn: number;
 }
 
+// In-memory token cache — works correctly for a single App Service instance.
+// Azure: when the App Service Plan is scaled out to multiple instances, each instance
+// maintains its own independent cache and obtains separate OAuth tokens. This is safe
+// (no shared state corruption) but increases OAuth token requests under scale-out.
+// For a scaled deployment, replace this with Azure Cache for Redis:
+//   Terraform resource: azurerm_redis_cache
+//   Replace Map reads/writes with ioredis get/set calls keyed on buildCacheKey().
+
 /** In-memory cache: cacheKey → CacheEntry */
 const cache = new Map<string, CacheEntry>();
 
