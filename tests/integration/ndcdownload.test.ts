@@ -41,8 +41,8 @@ const app = createApp();
 beforeEach(() => {
   jest.clearAllMocks();
   mockLookup.mockReturnValue('NDCDOWNLOAD');
-  mockFindByKey.mockReturnValue(VALID_COMPANY);
-  mockFindSub.mockReturnValue(VALID_SUB);
+  mockFindByKey.mockResolvedValue(VALID_COMPANY);
+  mockFindSub.mockResolvedValue(VALID_SUB);
 });
 
 describe('NDC Download', () => {

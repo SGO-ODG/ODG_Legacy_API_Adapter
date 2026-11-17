@@ -46,8 +46,8 @@ const app = createApp();
 beforeEach(() => {
   jest.clearAllMocks();
   mockLookup.mockReturnValue('NDCADVISOR');
-  mockFindByKey.mockReturnValue(VALID_COMPANY);
-  mockFindSub.mockReturnValue(VALID_SUB);
+  mockFindByKey.mockResolvedValue(VALID_COMPANY);
+  mockFindSub.mockResolvedValue(VALID_SUB);
 });
 
 // ─── Auth errors ─────────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ describe('NDC Advisor auth errors', () => {
   });
 
   it('returns 403 INVALID_KEY for unknown key', async () => {
-    mockFindByKey.mockReturnValue(undefined);
+    mockFindByKey.mockResolvedValue(undefined);
     const res = await request(app)
       .get('/restws/ndcadvisor?ndc=12345-6789')
       .set('X-ODG-KEY', 'bad-key');
@@ -69,7 +69,7 @@ describe('NDC Advisor auth errors', () => {
   });
 
   it('returns 403 ACCOUNT_DISABLED', async () => {
-    mockFindByKey.mockReturnValue({ ...VALID_COMPANY, disabled: 'Y' });
+    mockFindByKey.mockResolvedValue({ ...VALID_COMPANY, disabled: 'Y' });
     const res = await request(app)
       .get('/restws/ndcadvisor?ndc=12345-6789')
       .set('X-ODG-KEY', 'valid-key');
@@ -78,7 +78,7 @@ describe('NDC Advisor auth errors', () => {
   });
 
   it('returns 403 NOT_SUBSCRIBED', async () => {
-    mockFindSub.mockReturnValue(undefined);
+    mockFindSub.mockResolvedValue(undefined);
     const res = await request(app)
       .get('/restws/ndcadvisor?ndc=12345-6789')
       .set('X-ODG-KEY', 'valid-key');
@@ -87,7 +87,7 @@ describe('NDC Advisor auth errors', () => {
   });
 
   it('returns 403 SUB_NOT_STARTED', async () => {
-    mockFindSub.mockReturnValue({ ...VALID_SUB, subscriptionStartDate: '2099-01-01' });
+    mockFindSub.mockResolvedValue({ ...VALID_SUB, subscriptionStartDate: '2099-01-01' });
     const res = await request(app)
       .get('/restws/ndcadvisor?ndc=12345-6789')
       .set('X-ODG-KEY', 'valid-key');
@@ -96,7 +96,7 @@ describe('NDC Advisor auth errors', () => {
   });
 
   it('returns 403 SUB_EXPIRED', async () => {
-    mockFindSub.mockReturnValue({ ...VALID_SUB, subscriptionEndDate: '2000-01-01' });
+    mockFindSub.mockResolvedValue({ ...VALID_SUB, subscriptionEndDate: '2000-01-01' });
     const res = await request(app)
       .get('/restws/ndcadvisor?ndc=12345-6789')
       .set('X-ODG-KEY', 'valid-key');

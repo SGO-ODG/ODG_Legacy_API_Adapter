@@ -51,7 +51,7 @@ function parseStoredDate(d: string): Date {
  *                        e.g. 'ndcadvisor'. Pass this from the route layer.
  */
 export function legacyAuthMiddleware(serviceSegment: string) {
-  return (req: Request, res: Response, next: NextFunction): void => {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       // 1. Read and validate X-ODG-KEY header
       const rawKey = req.headers['x-odg-key'];
@@ -64,7 +64,7 @@ export function legacyAuthMiddleware(serviceSegment: string) {
       }
 
       // 2. Look up company (keyResult.data is already trimmed by the schema)
-      const company = findByKey(keyResult.data);
+      const company = await findByKey(keyResult.data);
       if (!company) {
         throw new LegacyError(ERRORS.INVALID_KEY());
       }
@@ -81,7 +81,7 @@ export function legacyAuthMiddleware(serviceSegment: string) {
       }
 
       // 5. Look up subscription
-      const subscription = findSubscription(company.companyCode, wsCode);
+      const subscription = await findSubscription(company.companyCode, wsCode);
       if (!subscription) {
         throw new LegacyError(ERRORS.NOT_SUBSCRIBED());
       }

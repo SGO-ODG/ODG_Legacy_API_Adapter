@@ -51,8 +51,8 @@ const app = createApp();
 beforeEach(() => {
   jest.clearAllMocks();
   mockLookup.mockReturnValue('BPGUIDE');
-  mockFindByKey.mockReturnValue(VALID_COMPANY);
-  mockFindSub.mockReturnValue(VALID_SUB);
+  mockFindByKey.mockResolvedValue(VALID_COMPANY);
+  mockFindSub.mockResolvedValue(VALID_SUB);
 });
 
 describe('BP Guide auth errors', () => {
@@ -62,7 +62,7 @@ describe('BP Guide auth errors', () => {
   });
 
   it('returns 403 NOT_SUBSCRIBED', async () => {
-    mockFindSub.mockReturnValue(undefined);
+    mockFindSub.mockResolvedValue(undefined);
     const res = await request(app)
       .get('/restws/bpguide?icd=M54.5')
       .set('X-ODG-KEY', 'valid-key');

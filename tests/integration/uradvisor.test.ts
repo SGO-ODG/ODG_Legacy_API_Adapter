@@ -46,8 +46,8 @@ const app = createApp();
 beforeEach(() => {
   jest.clearAllMocks();
   mockLookup.mockReturnValue('URADVISOR');
-  mockFindByKey.mockReturnValue(VALID_COMPANY);
-  mockFindSub.mockReturnValue(FULL_SUB);
+  mockFindByKey.mockResolvedValue(VALID_COMPANY);
+  mockFindSub.mockResolvedValue(FULL_SUB);
 });
 
 describe('UR Advisor auth errors', () => {
@@ -57,7 +57,7 @@ describe('UR Advisor auth errors', () => {
   });
 
   it('returns 403 NOT_SUBSCRIBED', async () => {
-    mockFindSub.mockReturnValue(undefined);
+    mockFindSub.mockResolvedValue(undefined);
     const res = await request(app)
       .get('/restws/uradvisor?icd=M54.5&cpt=99213')
       .set('X-ODG-KEY', 'valid-key');
@@ -116,7 +116,7 @@ describe('UR Advisor successful responses', () => {
   });
 
   it('excludes full output fields when subscription outputMode=S', async () => {
-    mockFindSub.mockReturnValue(STREAMLINED_SUB);
+    mockFindSub.mockResolvedValue(STREAMLINED_SUB);
     mockOdgGet.mockResolvedValue({ items: [SAMPLE_TAO_ITEM] });
     const res = await request(app)
       .get('/restws/uradvisor?icd=M54.5&cpt=99213')

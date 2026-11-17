@@ -9,13 +9,17 @@ const envSchema = z.object({
   // TCP port the Express server listens on.
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
 
-  // Filesystem path to the local read-only SQLite file containing companymaster and companywebservice.
-  SQLITE_DATABASE_PATH: z.string().min(1),
-  // When true the SQLite connection is opened in read-only mode, preventing accidental writes.
-  SQLITE_READ_ONLY: z
+  // PostgreSQL connection settings for companymaster and companywebservice tables.
+  PG_HOST: z.string().min(1),
+  PG_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
+  PG_DATABASE: z.string().min(1),
+  PG_USER: z.string().min(1),
+  PG_PASSWORD: z.string().min(1),
+  // When true the pg Pool uses SSL (rejectUnauthorized: false). Set for managed cloud databases.
+  PG_SSL: z
     .string()
     .transform((v) => v.toLowerCase() === 'true')
-    .default('true'),
+    .default('false'),
 
   // Base URL of the ODG API v1.2 (e.g. https://api.odgbymcg.com).
   ODG_API_BASE_URL: z.string().url(),
