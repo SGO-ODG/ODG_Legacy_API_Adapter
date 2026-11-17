@@ -32,6 +32,7 @@ import {
 import { UpstreamError } from '../upstream/odgClient';
 import { appendLegacyMeta } from '../serializers/legacyResponse';
 import { isDebugEnabled } from '../config/env';
+import { usageLoggerMiddleware } from '../middleware/usageLogger';
 
 const router = Router();
 
@@ -43,6 +44,7 @@ router.use(formatSelectorMiddleware);
 router.get(
   ['/ndcadvisor', '/ndcadvisor/format/json'],
   legacyAuthMiddleware('ndcadvisor'),
+  usageLoggerMiddleware(),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const format = getLegacyFormat(res);
@@ -77,6 +79,7 @@ router.post('/ndcadvisor', (_req, res) =>
 router.get(
   ['/ndcdownload', '/ndcdownload/format/json'],
   legacyAuthMiddleware('ndcdownload'),
+  usageLoggerMiddleware(),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const format = getLegacyFormat(res);
@@ -133,6 +136,7 @@ router.post('/ndcdownload', (_req, res) =>
 router.get(
   '/uradvisor*',
   legacyAuthMiddleware('uradvisor'),
+  usageLoggerMiddleware(),
   async (req: Request, res: Response, next: NextFunction) => {
     let ctx: ReturnType<typeof parseUraParams> | undefined;
     try {
@@ -197,6 +201,7 @@ router.post('/uradvisor*', (_req, res) =>
 router.get(
   '/bpguide*',
   legacyAuthMiddleware('bpguide'),
+  usageLoggerMiddleware(),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       // CI-style paths allow /format/json anywhere in the segment list, not just at
@@ -252,6 +257,7 @@ router.post('/bpguide*', (_req, res) =>
 router.post(
   ['/onesearch', '/onesearch/format/json'],
   legacyAuthMiddleware('onesearch'),
+  usageLoggerMiddleware(),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const format = getLegacyFormat(res);

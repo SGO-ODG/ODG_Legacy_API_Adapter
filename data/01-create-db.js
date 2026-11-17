@@ -61,6 +61,30 @@ const client = new Client({
   `);
   console.log('Index ready: idx_companywebservice_lookup');
 
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS webserviceusage (
+      id               SERIAL        NOT NULL,
+      companyCode      VARCHAR(20)   NOT NULL,
+      webserviceCode   VARCHAR(20)   NOT NULL,
+      clientHost       VARCHAR(45)   NOT NULL,
+      requestReceived  TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      requestBody      TEXT          DEFAULT NULL,
+      queryData        TEXT          DEFAULT NULL,
+      clientId         VARCHAR(30)   DEFAULT NULL,
+      resultCode       VARCHAR(5)    NOT NULL,
+      contentType      VARCHAR(255)  DEFAULT NULL,
+      acceptHeader     VARCHAR(255)  DEFAULT NULL,
+      CONSTRAINT pk_webserviceusage PRIMARY KEY (id)
+    )
+  `);
+  console.log('Table ready: webserviceusage');
+
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_webserviceusage_lookup
+      ON webserviceusage (companyCode, webserviceCode, requestReceived DESC)
+  `);
+  console.log('Index ready: idx_webserviceusage_lookup');
+
   await client.end();
   console.log('Done.');
 })().catch((err) => {

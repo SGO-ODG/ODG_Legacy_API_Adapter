@@ -48,6 +48,11 @@ const envSchema = z.object({
   // Set to Y to log incoming legacy request URLs, outgoing ODG API URLs, and response bodies.
   // Development only — never enable in production; responses may contain medical data.
   ODG_DEBUG_PAYLOADS: z.enum(['Y', 'N']).default('N'),
+
+  // When Y, every authenticated legacy request is written to the webserviceusage table.
+  // Requires the webserviceusage table to exist (run data/01-create-db.js first).
+  // Disable in production unless you need per-request diagnostics.
+  USAGE_LOGGING_ENABLED: z.enum(['Y', 'N']).default('N'),
   // Maximum number of lines printed per response payload when ODG_DEBUG_PAYLOADS=Y.
   // Prevents console flooding for large bulk responses (e.g. NDC download).
   PAYLOAD_DUMP_ROW_LIMIT: z.coerce.number().int().min(1).default(100),
@@ -78,6 +83,10 @@ export function getEnv(): Env {
 
 export function isDebugEnabled(): boolean {
   return getEnv().ODG_DEBUG_PAYLOADS === 'Y';
+}
+
+export function isUsageLoggingEnabled(): boolean {
+  return getEnv().USAGE_LOGGING_ENABLED === 'Y';
 }
 
 export function getPayloadDumpRowLimit(): number {

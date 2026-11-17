@@ -21,7 +21,7 @@ const mockLookup = serviceRegistry.lookupServiceCode as jest.MockedFunction<type
 const mockOdgGet = odgClient.odgGet as jest.MockedFunction<typeof odgClient.odgGet>;
 
 const VALID_COMPANY: companymaster.CompanyRow = {
-  companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key',
+  companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key', disabled: 'N',
 };
 const VALID_SUB: companywebservice.SubscriptionRow = {
   id: 1, companyCode: 'ACME', webserviceCode: 'NDCADVISOR',
@@ -145,8 +145,8 @@ describe('NDC Advisor successful responses', () => {
       .set('X-ODG-KEY', 'valid-key');
     expect(res.status).toBe(200);
     expect(res.type).toMatch(/xml/);
-    expect(res.text).toContain('<ndcCode>12345-6789</ndcCode>');
-    expect(res.text).toContain('<brandName>BrandName</brandName>');
+    expect(res.text).toContain('<ndccode>12345-6789</ndccode>');
+    expect(res.text).toContain('<brandname>BrandName</brandname>');
     expect(res.text).toContain('<rescount>1</rescount>');
   });
 
@@ -160,7 +160,7 @@ describe('NDC Advisor successful responses', () => {
       .set('X-ODG-KEY', 'valid-key');
     expect(res.status).toBe(200);
     expect(res.type).toMatch(/json/);
-    expect(res.body.ndcCode).toBe('12345-6789');
+    expect(res.body.ndccode).toBe('12345-6789');
     expect(res.body.rescount).toBe(1);
   });
 
@@ -204,7 +204,7 @@ describe('NDC Advisor successful responses', () => {
       .get('/restws/ndcadvisor?ndc=1234A&country=AU')
       .set('X-ODG-KEY', 'valid-key');
     expect(res.status).toBe(200);
-    expect(res.text).toContain('<pbsCode>1234A</pbsCode>');
+    expect(res.text).toContain('<pbscode>1234A</pbscode>');
   });
 });
 

@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { legacyAuthMiddleware } from '../middleware/legacyAuth';
+import { usageLoggerMiddleware } from '../middleware/usageLogger';
 import { formatSelectorMiddleware, getLegacyFormat } from '../middleware/formatSelector';
 import { sendLegacyResponse, sendLegacyError } from '../serializers/legacyResponse';
 import { LegacyError, ERRORS } from '../errors/legacyErrors';
@@ -19,6 +20,7 @@ router.use(formatSelectorMiddleware);
 router.post(
   ['/comorbidity', '/comorbidity/format/json'],
   legacyAuthMiddleware('comorbidity'),
+  usageLoggerMiddleware(),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const format = getLegacyFormat(res);
@@ -49,6 +51,7 @@ router.get('/comorbidity', (_req, res) =>
 router.post(
   ['/reserve', '/reserve/format/json'],
   legacyAuthMiddleware('reserve'),
+  usageLoggerMiddleware(),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const format = getLegacyFormat(res);

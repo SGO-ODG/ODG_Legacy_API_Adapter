@@ -21,7 +21,7 @@ const mockLookup = serviceRegistry.lookupServiceCode as jest.MockedFunction<type
 const mockOdgGet = odgClient.odgGet as jest.MockedFunction<typeof odgClient.odgGet>;
 
 const VALID_COMPANY: companymaster.CompanyRow = {
-  companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key',
+  companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key', disabled: 'N',
 };
 const FULL_SUB: companywebservice.SubscriptionRow = {
   id: 1, companyCode: 'ACME', webserviceCode: 'URADVISOR',
@@ -30,14 +30,17 @@ const FULL_SUB: companywebservice.SubscriptionRow = {
 const STREAMLINED_SUB = { ...FULL_SUB, outputMode: 'S' };
 
 const SAMPLE_TAO_ITEM = {
-  code: '99213', name: 'Office visit',
-  incidenceRate: 1.2, procedureFrequency: 2.3,
-  visit25: 1, visit50: 2, visit75: 3,
-  visitMean: 2.1, costMean: 100.0,
-  odgCAA: 1, paymentFlag: 'Green', costPerVisit: 50.0,
-  procedureType: 'Medical', averageLostDays: 3.0,
-  medianLostDays: 2.0, percentNeverReturn: 0.1,
-  percentZeroDays: 0.2, taoIndex: 1.0,
+  icd: { code: 'M54.5', name: 'Low back pain' },
+  procedures: [{
+    code: '99213', name: 'Office visit',
+    incidenceRate: 1.2, procedureFrequency: 2.3,
+    visit25: 1, visit50: 2, visit75: 3,
+    visitMean: 2.1, costMean: 100.0,
+    odgCAA: 1, paymentFlag: 'Green', costPerVisit: 50.0,
+    procedureType: 'Medical', averageLostDays: 3.0,
+    medianLostDays: 2.0, percentNeverReturn: 0.1,
+    percentZeroDays: 0.2, taoIndex: 1.0,
+  }],
 };
 
 const app = createApp();
@@ -98,7 +101,7 @@ describe('UR Advisor successful responses', () => {
     expect(res.status).toBe(200);
     expect(res.type).toMatch(/xml/);
     // Legacy lowercase field names
-    expect(res.text).toContain('<incidencerate>1.2</incidencerate>');
+    expect(res.text).toContain('<incidencerate>1.2000</incidencerate>');
     expect(res.text).toContain('<paymentflag>Green</paymentflag>');
     expect(res.text).toContain('<odgcaa>1</odgcaa>');
   });

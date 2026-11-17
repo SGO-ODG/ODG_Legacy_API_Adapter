@@ -21,7 +21,7 @@ const mockLookup = serviceRegistry.lookupServiceCode as jest.MockedFunction<type
 const mockOdgGet = odgClient.odgGet as jest.MockedFunction<typeof odgClient.odgGet>;
 
 const VALID_COMPANY: companymaster.CompanyRow = {
-  companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key',
+  companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key', disabled: 'N',
 };
 const VALID_SUB: companywebservice.SubscriptionRow = {
   id: 1, companyCode: 'ACME', webserviceCode: 'BPGUIDE',
@@ -145,7 +145,7 @@ describe('BP Guide successful responses', () => {
   });
 
   it('detects JSON format when /format/json appears mid-path (CI style)', async () => {
-    mockOdgGet.mockResolvedValue([SAMPLE_GUIDELINE]);
+    mockOdgGet.mockResolvedValue([{ ...SAMPLE_GUIDELINE, code: 'S33.5' }]);
     const res = await request(app)
       .get('/restws/bpguide/icd/S33.5/format/json/clientid/odg_integration')
       .set('X-ODG-KEY', 'valid-key');

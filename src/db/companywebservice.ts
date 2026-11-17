@@ -10,8 +10,12 @@ export interface SubscriptionRow {
 }
 
 const SQL = `
-  SELECT id, companyCode, webserviceCode,
-         subscriptionStartDate, subscriptionEndDate, outputMode
+  SELECT id,
+         companyCode           AS "companyCode",
+         webserviceCode        AS "webserviceCode",
+         subscriptionStartDate AS "subscriptionStartDate",
+         subscriptionEndDate   AS "subscriptionEndDate",
+         outputMode            AS "outputMode"
   FROM   companywebservice
   WHERE  companyCode    = $1
   AND    webserviceCode = $2

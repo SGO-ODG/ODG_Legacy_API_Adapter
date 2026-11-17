@@ -8,7 +8,10 @@ export interface CompanyRow {
 }
 
 const SQL = `
-  SELECT companyCode, companyName, webserviceKey, disabled
+  SELECT companyCode   AS "companyCode",
+         companyName   AS "companyName",
+         webserviceKey AS "webserviceKey",
+         disabled
   FROM   companymaster
   WHERE  webserviceKey = $1
   LIMIT  1
