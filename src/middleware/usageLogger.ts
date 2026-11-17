@@ -19,6 +19,9 @@ export function usageLoggerMiddleware() {
       return;
     }
 
+    // Capture wall-clock start time for server response time measurement.
+    const requestStartMs = Date.now();
+
     // Snapshot request fields now — they may be mutated or unavailable later.
     const isPost = req.method === 'POST';
     const rawBody: string | null = (() => {
@@ -27,7 +30,7 @@ export function usageLoggerMiddleware() {
       if (typeof req.body === 'string') return req.body;
       return null;
     })();
-    const queryData: string | null = isPost ? null : (req.originalUrl ?? null);
+    const queryParameters: string | null = isPost ? null : (req.originalUrl ?? null);
     const clientId: string | null =
       typeof req.query.clientid === 'string' ? req.query.clientid : null;
     const contentType: string | null = req.headers['content-type'] ?? null;
@@ -49,16 +52,19 @@ export function usageLoggerMiddleware() {
           ? 'application/json'
           : 'application/xml';
 
+      const serverResponseTime = Date.now() - requestStartMs;
+
       const entry = {
-        companyCode:    legacy.company.companyCode,
-        webserviceCode: legacy.webserviceCode,
+        companyCode:        legacy.company.companyCode,
+        webserviceCode:     legacy.webserviceCode,
         clientHost,
-        requestBody:    rawBody,
-        queryData,
+        requestBody:        rawBody,
+        queryParameters,
         clientId,
-        resultCode:     String(res.statusCode),
+        resultCode:         String(res.statusCode),
         contentType,
-        acceptHeader:   effectiveAccept,
+        acceptHeader:       effectiveAccept,
+        serverResponseTime,
       };
 
       console.log(`[USAGE LOG] Inserting: company=${entry.companyCode} service=${entry.webserviceCode} status=${entry.resultCode}`);

@@ -5,19 +5,20 @@ export interface UsageLogEntry {
   webserviceCode: string;
   clientHost: string;
   requestBody?: string | null;
-  queryData?: string | null;
+  queryParameters?: string | null;
   clientId?: string | null;
   resultCode: string;
   contentType?: string | null;
   acceptHeader?: string | null;
+  serverResponseTime?: number | null;
 }
 
 const SQL = `
   INSERT INTO webserviceusage
     (companyCode, webserviceCode, clientHost,
-     requestBody, queryData, clientId,
-     resultCode, contentType, acceptHeader)
-  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     requestBody, queryParameters, clientId,
+     resultCode, contentType, acceptHeader, serverResponseTime)
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 `;
 
 /**
@@ -30,11 +31,12 @@ export async function insertUsageLog(entry: UsageLogEntry): Promise<void> {
     entry.companyCode,
     entry.webserviceCode,
     entry.clientHost,
-    entry.requestBody   ?? null,
-    entry.queryData     ?? null,
-    entry.clientId      ?? null,
+    entry.requestBody        ?? null,
+    entry.queryParameters    ?? null,
+    entry.clientId           ?? null,
     entry.resultCode,
-    entry.contentType   ?? null,
-    entry.acceptHeader  ?? null,
+    entry.contentType        ?? null,
+    entry.acceptHeader       ?? null,
+    entry.serverResponseTime ?? null,
   ]);
 }
