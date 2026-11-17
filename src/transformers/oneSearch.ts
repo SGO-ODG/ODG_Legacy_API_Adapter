@@ -1,4 +1,3 @@
-import { CompanyRow } from '../db/companymaster';
 import { odgGet } from '../upstream/odgClient';
 import { OdgSearchResponse } from '../types/odg';
 import { LegacySearchResultBase } from '../types/legacy';
@@ -102,10 +101,9 @@ export function parseOneSearchBody(raw: Buffer | string): OneSearchContext {
 // ─── Upstream call ────────────────────────────────────────────────────────────
 
 async function fetchSearchResults(
-  company: CompanyRow,
   ctx: OneSearchContext,
 ): Promise<OdgSearchResponse> {
-  return odgGet<OdgSearchResponse>(company, '/search', {
+  return odgGet<OdgSearchResponse>('/search', {
     query: ctx.text,
     type: ctx.types,
     facets: false,
@@ -167,10 +165,9 @@ export interface OneSearchResult {
 }
 
 export async function handleOneSearch(
-  company: CompanyRow,
   ctx: OneSearchContext,
 ): Promise<OneSearchResult> {
-  const data = await fetchSearchResults(company, ctx);
+  const data = await fetchSearchResults(ctx);
   const resultSets = data.resultSets ?? [];
 
   const results: LegacySearchResultBase[] = [];

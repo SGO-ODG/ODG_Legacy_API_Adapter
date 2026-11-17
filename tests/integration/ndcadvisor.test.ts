@@ -21,8 +21,7 @@ const mockLookup = serviceRegistry.lookupServiceCode as jest.MockedFunction<type
 const mockOdgGet = odgClient.odgGet as jest.MockedFunction<typeof odgClient.odgGet>;
 
 const VALID_COMPANY: companymaster.CompanyRow = {
-  companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key',
-  disabled: 'N', odgapiClientId: 'cid', odgapiClientSecret: 'sec',
+  companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key', disabled: 'N',
 };
 const VALID_SUB: companywebservice.SubscriptionRow = {
   id: 1, companyCode: 'ACME', webserviceCode: 'NDCADVISOR',
@@ -46,8 +45,8 @@ const app = createApp();
 beforeEach(() => {
   jest.clearAllMocks();
   mockLookup.mockReturnValue('NDCADVISOR');
-  mockFindByKey.mockReturnValue(VALID_COMPANY);
-  mockFindSub.mockReturnValue(VALID_SUB);
+  mockFindByKey.mockResolvedValue(VALID_COMPANY);
+  mockFindSub.mockResolvedValue(VALID_SUB);
 });
 
 // ─── Auth errors ─────────────────────────────────────────────────────────────
@@ -60,7 +59,7 @@ describe('NDC Advisor auth errors', () => {
   });
 
   it('returns 403 INVALID_KEY for unknown key', async () => {
-    mockFindByKey.mockReturnValue(undefined);
+    mockFindByKey.mockResolvedValue(undefined);
     const res = await request(app)
       .get('/restws/ndcadvisor?ndc=12345-6789')
       .set('X-ODG-KEY', 'bad-key');
@@ -69,7 +68,7 @@ describe('NDC Advisor auth errors', () => {
   });
 
   it('returns 403 ACCOUNT_DISABLED', async () => {
-    mockFindByKey.mockReturnValue({ ...VALID_COMPANY, disabled: 'Y' });
+    mockFindByKey.mockResolvedValue({ ...VALID_COMPANY, disabled: 'Y' });
     const res = await request(app)
       .get('/restws/ndcadvisor?ndc=12345-6789')
       .set('X-ODG-KEY', 'valid-key');
@@ -78,7 +77,7 @@ describe('NDC Advisor auth errors', () => {
   });
 
   it('returns 403 NOT_SUBSCRIBED', async () => {
-    mockFindSub.mockReturnValue(undefined);
+    mockFindSub.mockResolvedValue(undefined);
     const res = await request(app)
       .get('/restws/ndcadvisor?ndc=12345-6789')
       .set('X-ODG-KEY', 'valid-key');
@@ -87,7 +86,7 @@ describe('NDC Advisor auth errors', () => {
   });
 
   it('returns 403 SUB_NOT_STARTED', async () => {
-    mockFindSub.mockReturnValue({ ...VALID_SUB, subscriptionStartDate: '2099-01-01' });
+    mockFindSub.mockResolvedValue({ ...VALID_SUB, subscriptionStartDate: '2099-01-01' });
     const res = await request(app)
       .get('/restws/ndcadvisor?ndc=12345-6789')
       .set('X-ODG-KEY', 'valid-key');
@@ -96,7 +95,7 @@ describe('NDC Advisor auth errors', () => {
   });
 
   it('returns 403 SUB_EXPIRED', async () => {
-    mockFindSub.mockReturnValue({ ...VALID_SUB, subscriptionEndDate: '2000-01-01' });
+    mockFindSub.mockResolvedValue({ ...VALID_SUB, subscriptionEndDate: '2000-01-01' });
     const res = await request(app)
       .get('/restws/ndcadvisor?ndc=12345-6789')
       .set('X-ODG-KEY', 'valid-key');
@@ -146,8 +145,8 @@ describe('NDC Advisor successful responses', () => {
       .set('X-ODG-KEY', 'valid-key');
     expect(res.status).toBe(200);
     expect(res.type).toMatch(/xml/);
-    expect(res.text).toContain('<ndcCode>12345-6789</ndcCode>');
-    expect(res.text).toContain('<brandName>BrandName</brandName>');
+    expect(res.text).toContain('<ndccode>12345-6789</ndccode>');
+    expect(res.text).toContain('<brandname>BrandName</brandname>');
     expect(res.text).toContain('<rescount>1</rescount>');
   });
 
@@ -161,7 +160,7 @@ describe('NDC Advisor successful responses', () => {
       .set('X-ODG-KEY', 'valid-key');
     expect(res.status).toBe(200);
     expect(res.type).toMatch(/json/);
-    expect(res.body.ndcCode).toBe('12345-6789');
+    expect(res.body.ndccode).toBe('12345-6789');
     expect(res.body.rescount).toBe(1);
   });
 
@@ -205,7 +204,7 @@ describe('NDC Advisor successful responses', () => {
       .get('/restws/ndcadvisor?ndc=1234A&country=AU')
       .set('X-ODG-KEY', 'valid-key');
     expect(res.status).toBe(200);
-    expect(res.text).toContain('<pbsCode>1234A</pbsCode>');
+    expect(res.text).toContain('<pbscode>1234A</pbscode>');
   });
 });
 

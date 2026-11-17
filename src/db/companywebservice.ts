@@ -4,21 +4,21 @@ export interface SubscriptionRow {
   id: number;
   companyCode: string;
   webserviceCode: string;
-  subscriptionStartDate: string; // YYYY-MM-DD stored as text
-  subscriptionEndDate: string;   // YYYY-MM-DD stored as text
+  subscriptionStartDate: string; // YYYY-MM-DD returned as string by pg for DATE columns
+  subscriptionEndDate: string;   // YYYY-MM-DD returned as string by pg for DATE columns
   outputMode: string;            // 'F' = full, 'S' = streamlined
 }
 
-/**
- * Named-param SQL — compatible with both better-sqlite3 and mssql (Azure SQL).
- * Switching to MSSQL requires only replacing the DbRunner implementation.
- */
 const SQL = `
-  SELECT id, companyCode, webserviceCode,
-         subscriptionStartDate, subscriptionEndDate, outputMode
+  SELECT id,
+         companyCode           AS "companyCode",
+         webserviceCode        AS "webserviceCode",
+         subscriptionStartDate AS "subscriptionStartDate",
+         subscriptionEndDate   AS "subscriptionEndDate",
+         outputMode            AS "outputMode"
   FROM   companywebservice
-  WHERE  companyCode    = @companyCode
-  AND    webserviceCode = @webserviceCode
+  WHERE  companyCode    = $1
+  AND    webserviceCode = $2
   LIMIT  1
 `;
 
@@ -26,12 +26,12 @@ const SQL = `
  * Look up the subscription for a company + service code pair.
  * Returns undefined when no record exists.
  *
- * @param runner  Injected for tests; defaults to the production SQLite runner.
+ * @param runner  Injected for tests; defaults to the production PostgreSQL runner.
  */
-export function findSubscription(
+export async function findSubscription(
   companyCode: string,
   webserviceCode: string,
   runner: DbRunner = defaultRunner,
-): SubscriptionRow | undefined {
-  return runner.queryOne<SubscriptionRow>(SQL, { companyCode, webserviceCode });
+): Promise<SubscriptionRow | undefined> {
+  return runner.queryOne<SubscriptionRow>(SQL, [companyCode, webserviceCode]);
 }

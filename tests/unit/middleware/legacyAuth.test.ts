@@ -34,8 +34,6 @@ const ACTIVE_COMPANY: companymaster.CompanyRow = {
   companyName: 'Acme Corp',
   webserviceKey: 'valid-key',
   disabled: 'N',
-  odgapiClientId: 'client-id',
-  odgapiClientSecret: 'secret',
 };
 
 const ACTIVE_SUB: companywebservice.SubscriptionRow = {
@@ -55,71 +53,71 @@ describe('legacyAuthMiddleware', () => {
     mockLookup.mockReturnValue('NDCADVISOR');
   });
 
-  it('returns 403 INVALID_KEY when header is missing', () => {
+  it('returns 403 INVALID_KEY when header is missing', async () => {
     const { req, res, next, status, send } = makeReqRes();
-    mw(req, res, next);
+    await mw(req, res, next);
     expect(status).toHaveBeenCalledWith(403);
     expect(parseXmlError(send.mock.calls[0][0])).toBe('Invalid web service key.');
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('returns 403 INVALID_KEY when key not found in DB', () => {
-    mockFindByKey.mockReturnValue(undefined);
+  it('returns 403 INVALID_KEY when key not found in DB', async () => {
+    mockFindByKey.mockResolvedValue(undefined);
     const { req, res, next, status, send } = makeReqRes('bad-key');
-    mw(req, res, next);
+    await mw(req, res, next);
     expect(status).toHaveBeenCalledWith(403);
     expect(parseXmlError(send.mock.calls[0][0])).toBe('Invalid web service key.');
   });
 
-  it('returns 403 ACCOUNT_DISABLED when company is disabled', () => {
-    mockFindByKey.mockReturnValue({ ...ACTIVE_COMPANY, disabled: 'Y' });
+  it('returns 403 ACCOUNT_DISABLED when company is disabled', async () => {
+    mockFindByKey.mockResolvedValue({ ...ACTIVE_COMPANY, disabled: 'Y' });
     const { req, res, next, status, send } = makeReqRes('valid-key');
-    mw(req, res, next);
+    await mw(req, res, next);
     expect(status).toHaveBeenCalledWith(403);
     expect(parseXmlError(send.mock.calls[0][0])).toBe('Your account is disabled.');
   });
 
-  it('returns 403 SERVICE_NOT_EXIST when service not in registry', () => {
-    mockFindByKey.mockReturnValue(ACTIVE_COMPANY);
+  it('returns 403 SERVICE_NOT_EXIST when service not in registry', async () => {
+    mockFindByKey.mockResolvedValue(ACTIVE_COMPANY);
     mockLookup.mockReturnValue(undefined);
     const { req, res, next, status, send } = makeReqRes('valid-key');
-    mw(req, res, next);
+    await mw(req, res, next);
     expect(status).toHaveBeenCalledWith(403);
     expect(parseXmlError(send.mock.calls[0][0])).toBe('Invalid, requested web service does not exist.');
   });
 
-  it('returns 403 NOT_SUBSCRIBED when subscription missing', () => {
-    mockFindByKey.mockReturnValue(ACTIVE_COMPANY);
-    mockFindSub.mockReturnValue(undefined);
+  it('returns 403 NOT_SUBSCRIBED when subscription missing', async () => {
+    mockFindByKey.mockResolvedValue(ACTIVE_COMPANY);
+    mockFindSub.mockResolvedValue(undefined);
     const { req, res, next, status, send } = makeReqRes('valid-key');
-    mw(req, res, next);
+    await mw(req, res, next);
     expect(status).toHaveBeenCalledWith(403);
     expect(parseXmlError(send.mock.calls[0][0])).toBe('You are not subscribed for requested web service.');
   });
 
-  it('returns 403 SUB_NOT_STARTED when subscription in future', () => {
-    mockFindByKey.mockReturnValue(ACTIVE_COMPANY);
-    mockFindSub.mockReturnValue({ ...ACTIVE_SUB, subscriptionStartDate: '2099-01-01' });
+  it('returns 403 SUB_NOT_STARTED when subscription in future', async () => {
+    mockFindByKey.mockResolvedValue(ACTIVE_COMPANY);
+    mockFindSub.mockResolvedValue({ ...ACTIVE_SUB, subscriptionStartDate: '2099-01-01' });
     const { req, res, next, status, send } = makeReqRes('valid-key');
-    mw(req, res, next);
+    await mw(req, res, next);
     expect(status).toHaveBeenCalledWith(403);
     expect(parseXmlError(send.mock.calls[0][0])).toMatch(/Your subscription will start from/);
   });
 
-  it('returns 403 SUB_EXPIRED when subscription is past', () => {
-    mockFindByKey.mockReturnValue(ACTIVE_COMPANY);
-    mockFindSub.mockReturnValue({ ...ACTIVE_SUB, subscriptionEndDate: '2000-01-01' });
+  it('returns 403 SUB_EXPIRED when subscription is past', async () => {
+    mockFindByKey.mockResolvedValue(ACTIVE_COMPANY);
+    mockFindSub.mockResolvedValue({ ...ACTIVE_SUB, subscriptionEndDate: '2000-01-01' });
     const { req, res, next, status, send } = makeReqRes('valid-key');
-    mw(req, res, next);
+    await mw(req, res, next);
     expect(status).toHaveBeenCalledWith(403);
     expect(parseXmlError(send.mock.calls[0][0])).toMatch(/Your subscription is expired on/);
   });
 
-  it('calls next() and attaches context when valid', () => {
-    mockFindByKey.mockReturnValue(ACTIVE_COMPANY);
-    mockFindSub.mockReturnValue(ACTIVE_SUB);
+  it('calls next() and attaches context when valid', async () => {
+    mockFindByKey.mockResolvedValue(ACTIVE_COMPANY);
+    mockFindSub.mockResolvedValue(ACTIVE_SUB);
     const { req, res, next } = makeReqRes('valid-key');
-    mw(req, res, next);
+    await mw(req, res, next);
     expect(next).toHaveBeenCalledWith();
     expect(req.legacy?.company.companyCode).toBe('ACME');
     expect(req.legacy?.webserviceCode).toBe('NDCADVISOR');

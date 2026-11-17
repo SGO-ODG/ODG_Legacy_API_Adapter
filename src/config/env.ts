@@ -9,13 +9,21 @@ const envSchema = z.object({
   // TCP port the Express server listens on.
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
 
-  // Filesystem path to the local read-only SQLite file containing companymaster and companywebservice.
-  SQLITE_DATABASE_PATH: z.string().min(1),
-  // When true the SQLite connection is opened in read-only mode, preventing accidental writes.
-  SQLITE_READ_ONLY: z
+  // PostgreSQL connection settings for companymaster and companywebservice tables.
+  PG_HOST: z.string().min(1),
+  PG_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
+  PG_DATABASE: z.string().min(1),
+  PG_USER: z.string().min(1),
+  PG_PASSWORD: z.string().min(1),
+  // When true the pg Pool uses SSL (rejectUnauthorized: false). Set for managed cloud databases.
+  PG_SSL: z
     .string()
     .transform((v) => v.toLowerCase() === 'true')
-    .default('true'),
+    .default('false'),
+
+  // Client credentials for ODG API OAuth — shared across all companies.
+  ODG_API_CLIENT_ID: z.string().min(1),
+  ODG_API_CLIENT_SECRET: z.string().min(1),
 
   // Base URL of the ODG API v1.2 (e.g. https://api.odgbymcg.com).
   ODG_API_BASE_URL: z.string().url(),
@@ -40,6 +48,11 @@ const envSchema = z.object({
   // Set to Y to log incoming legacy request URLs, outgoing ODG API URLs, and response bodies.
   // Development only — never enable in production; responses may contain medical data.
   ODG_DEBUG_PAYLOADS: z.enum(['Y', 'N']).default('N'),
+
+  // When Y, every authenticated legacy request is written to the webserviceusage table.
+  // Requires the webserviceusage table to exist (run data/01-create-db.js first).
+  // Disable in production unless you need per-request diagnostics.
+  USAGE_LOGGING_ENABLED: z.enum(['Y', 'N']).default('N'),
   // Maximum number of lines printed per response payload when ODG_DEBUG_PAYLOADS=Y.
   // Prevents console flooding for large bulk responses (e.g. NDC download).
   PAYLOAD_DUMP_ROW_LIMIT: z.coerce.number().int().min(1).default(100),
@@ -70,6 +83,10 @@ export function getEnv(): Env {
 
 export function isDebugEnabled(): boolean {
   return getEnv().ODG_DEBUG_PAYLOADS === 'Y';
+}
+
+export function isUsageLoggingEnabled(): boolean {
+  return getEnv().USAGE_LOGGING_ENABLED === 'Y';
 }
 
 export function getPayloadDumpRowLimit(): number {

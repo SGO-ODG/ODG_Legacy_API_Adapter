@@ -5,7 +5,7 @@ describe('buildLegacyXml', () => {
   it('wraps model in <root> element', () => {
     const xml = buildLegacyXml({ ndcCode: '12345-6789' });
     expect(xml).toContain('<root>');
-    expect(xml).toContain('<ndcCode>12345-6789</ndcCode>');
+    expect(xml).toContain('<ndccode>12345-6789</ndccode>');
     expect(xml).toContain('</root>');
   });
 

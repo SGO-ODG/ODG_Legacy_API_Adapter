@@ -32,6 +32,7 @@ import {
 import { UpstreamError } from '../upstream/odgClient';
 import { appendLegacyMeta } from '../serializers/legacyResponse';
 import { isDebugEnabled } from '../config/env';
+import { usageLoggerMiddleware } from '../middleware/usageLogger';
 
 const router = Router();
 
@@ -43,13 +44,14 @@ router.use(formatSelectorMiddleware);
 router.get(
   ['/ndcadvisor', '/ndcadvisor/format/json'],
   legacyAuthMiddleware('ndcadvisor'),
+  usageLoggerMiddleware(),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const format = getLegacyFormat(res);
       const ctx = parseNdcAdvisorParams(
         req.query as Record<string, string | string[] | undefined>,
       );
-      const result = await handleNdcAdvisor(req.legacy!.company, ctx);
+      const result = await handleNdcAdvisor(ctx);
       const model = buildNdcAdvisorModel(result);
       sendLegacyResponse(res, model, format);
     } catch (err) {
@@ -77,6 +79,7 @@ router.post('/ndcadvisor', (_req, res) =>
 router.get(
   ['/ndcdownload', '/ndcdownload/format/json'],
   legacyAuthMiddleware('ndcdownload'),
+  usageLoggerMiddleware(),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const format = getLegacyFormat(res);
@@ -92,7 +95,7 @@ router.get(
         return;
       }
 
-      const records = await fetchAllNdcRecords(req.legacy!.company);
+      const records = await fetchAllNdcRecords();
 
       if (records.length === 0) {
         sendLegacyError(res, ERRORS.NO_RESULTS('NDC codes'));
@@ -133,6 +136,7 @@ router.post('/ndcdownload', (_req, res) =>
 router.get(
   '/uradvisor*',
   legacyAuthMiddleware('uradvisor'),
+  usageLoggerMiddleware(),
   async (req: Request, res: Response, next: NextFunction) => {
     let ctx: ReturnType<typeof parseUraParams> | undefined;
     try {
@@ -145,7 +149,7 @@ router.get(
         ...(req.query as Record<string, string | string[] | undefined>),
       };
       ctx = parseUraParams(merged, req.legacy!.subscription);
-      const result = await handleUrAdvisor(req.legacy!.company, ctx);
+      const result = await handleUrAdvisor(ctx);
 
       if (format === 'json') {
         const jsonRecords = result.records.map((rec) =>
@@ -197,6 +201,7 @@ router.post('/uradvisor*', (_req, res) =>
 router.get(
   '/bpguide*',
   legacyAuthMiddleware('bpguide'),
+  usageLoggerMiddleware(),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       // CI-style paths allow /format/json anywhere in the segment list, not just at
@@ -212,7 +217,7 @@ router.get(
         ...(req.query as Record<string, string | string[] | undefined>),
       };
       const ctx = parseBpGuideParams(merged);
-      const result = await handleBpGuide(req.legacy!.company, ctx);
+      const result = await handleBpGuide(ctx);
       if (format === 'json') {
         if (result.clientid) {
           // PHP mixes numeric-indexed records with string keys rescount+clientid,
@@ -252,6 +257,7 @@ router.post('/bpguide*', (_req, res) =>
 router.post(
   ['/onesearch', '/onesearch/format/json'],
   legacyAuthMiddleware('onesearch'),
+  usageLoggerMiddleware(),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const format = getLegacyFormat(res);
@@ -264,7 +270,7 @@ router.post(
       if (isDebugEnabled()) {
         console.log(`[LEGACY PARSED] text="${ctx.text}" types=${JSON.stringify(ctx.types)}`);
       }
-      const result = await handleOneSearch(req.legacy!.company, ctx);
+      const result = await handleOneSearch(ctx);
       if (format === 'json') {
         res.status(200).json(buildOneSearchJsonBody(result));
       } else {

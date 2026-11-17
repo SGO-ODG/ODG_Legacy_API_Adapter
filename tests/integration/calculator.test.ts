@@ -21,8 +21,7 @@ const mockLookup = serviceRegistry.lookupServiceCode as jest.MockedFunction<type
 const mockOdgPost = odgClient.odgPost as jest.MockedFunction<typeof odgClient.odgPost>;
 
 const VALID_COMPANY: companymaster.CompanyRow = {
-  companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key',
-  disabled: 'N', odgapiClientId: 'cid', odgapiClientSecret: 'sec',
+  companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key', disabled: 'N',
 };
 
 function makeSub(ws: string): companywebservice.SubscriptionRow {
@@ -56,7 +55,7 @@ const app = createApp();
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockFindByKey.mockReturnValue(VALID_COMPANY);
+  mockFindByKey.mockResolvedValue(VALID_COMPANY);
 });
 
 // ─── Comorbidity ──────────────────────────────────────────────────────────────
@@ -64,7 +63,7 @@ beforeEach(() => {
 describe('Comorbidity calculator auth errors', () => {
   beforeEach(() => {
     mockLookup.mockReturnValue('COMORBIDITY');
-    mockFindSub.mockReturnValue(makeSub('COMORBIDITY'));
+    mockFindSub.mockResolvedValue(makeSub('COMORBIDITY'));
   });
 
   it('returns 403 when no key', async () => {
@@ -86,7 +85,7 @@ describe('Comorbidity calculator auth errors', () => {
 describe('Comorbidity calculator request validation', () => {
   beforeEach(() => {
     mockLookup.mockReturnValue('COMORBIDITY');
-    mockFindSub.mockReturnValue(makeSub('COMORBIDITY'));
+    mockFindSub.mockResolvedValue(makeSub('COMORBIDITY'));
   });
 
   it('returns 400 INVALID_XML for bad XML', async () => {
@@ -114,7 +113,7 @@ describe('Comorbidity calculator request validation', () => {
 describe('Comorbidity calculator successful responses', () => {
   beforeEach(() => {
     mockLookup.mockReturnValue('COMORBIDITY');
-    mockFindSub.mockReturnValue(makeSub('COMORBIDITY'));
+    mockFindSub.mockResolvedValue(makeSub('COMORBIDITY'));
   });
 
   it('returns 200 XML with legacy field names', async () => {
@@ -162,7 +161,7 @@ describe('Comorbidity calculator successful responses', () => {
 describe('Reserve calculator successful responses', () => {
   beforeEach(() => {
     mockLookup.mockReturnValue('RESERVE');
-    mockFindSub.mockReturnValue(makeSub('RESERVE'));
+    mockFindSub.mockResolvedValue(makeSub('RESERVE'));
   });
 
   it('returns 200 XML with projectedcosts', async () => {

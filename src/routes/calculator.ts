@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { legacyAuthMiddleware } from '../middleware/legacyAuth';
+import { usageLoggerMiddleware } from '../middleware/usageLogger';
 import { formatSelectorMiddleware, getLegacyFormat } from '../middleware/formatSelector';
 import { sendLegacyResponse, sendLegacyError } from '../serializers/legacyResponse';
 import { LegacyError, ERRORS } from '../errors/legacyErrors';
@@ -19,11 +20,12 @@ router.use(formatSelectorMiddleware);
 router.post(
   ['/comorbidity', '/comorbidity/format/json'],
   legacyAuthMiddleware('comorbidity'),
+  usageLoggerMiddleware(),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const format = getLegacyFormat(res);
       const raw: Buffer | string = req.body ?? '';
-      const result = await handleComorbidity(req.legacy!.company, raw, format);
+      const result = await handleComorbidity(raw, format);
       const model = buildCalcModel(result);
       sendLegacyResponse(res, model, format);
     } catch (err) {
@@ -49,11 +51,12 @@ router.get('/comorbidity', (_req, res) =>
 router.post(
   ['/reserve', '/reserve/format/json'],
   legacyAuthMiddleware('reserve'),
+  usageLoggerMiddleware(),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const format = getLegacyFormat(res);
       const raw: Buffer | string = req.body ?? '';
-      const result = await handleReserve(req.legacy!.company, raw, format);
+      const result = await handleReserve(raw, format);
       const model = buildCalcModel(result);
       sendLegacyResponse(res, model, format);
     } catch (err) {

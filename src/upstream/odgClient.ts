@@ -4,12 +4,10 @@ import axios, {
   InternalAxiosRequestConfig,
 } from 'axios';
 import { getEnv, isDebugEnabled, getPayloadDumpRowLimit } from '../config/env';
-import { CompanyRow } from '../db/companymaster';
 import { getToken, invalidateToken } from '../auth/tokenCache';
 
 // Extend Axios config to carry retry metadata
 interface OdgRequestConfig extends InternalAxiosRequestConfig {
-  _company?: CompanyRow;
   _retry?: boolean;
 }
 
@@ -53,14 +51,11 @@ function buildClient(): AxiosInstance {
     },
   });
 
-  // Request interceptor: inject Bearer token, then log final headers when debug is on
+  // Request interceptor: inject shared Bearer token, then log final headers when debug is on
   instance.interceptors.request.use(async (config: OdgRequestConfig) => {
-    const company = config._company;
-    if (company) {
-      const token = await getToken(company);
-      config.headers = config.headers ?? {};
-      config.headers['Authorization'] = `Bearer ${token}`;
-    }
+    const token = await getToken();
+    config.headers = config.headers ?? {};
+    config.headers['Authorization'] = `Bearer ${token}`;
     if (isDebugEnabled()) {
       // Flatten AxiosHeaders to a plain object for readable logging
       const raw = config.headers?.toJSON?.() ?? { ...config.headers };
@@ -75,21 +70,17 @@ function buildClient(): AxiosInstance {
     return config;
   });
 
-  // Response interceptor: handle 401 with one retry
+  // Response interceptor: handle 401 with one retry using a fresh token
   instance.interceptors.response.use(
     (response) => response,
     async (error) => {
       const config = error.config as OdgRequestConfig | undefined;
-      if (
-        error.response?.status === 401 &&
-        config?._company &&
-        !config._retry
-      ) {
-        config._retry = true;
-        invalidateToken(config._company);
-        const token = await getToken(config._company);
-        config.headers['Authorization'] = `Bearer ${token}`;
-        return instance.request(config);
+      if (error.response?.status === 401 && !config?._retry) {
+        config!._retry = true;
+        invalidateToken();
+        const token = await getToken();
+        config!.headers['Authorization'] = `Bearer ${token}`;
+        return instance.request(config!);
       }
 
       // Log the raw ODG error response body before wrapping
@@ -122,13 +113,11 @@ export function _resetClientForTest(): void {
 }
 
 /**
- * Makes a GET request to ODG API v1.2 on behalf of a specific company.
- * @param company  Used to obtain/cache the correct OAuth token.
+ * Makes a GET request to ODG API v1.2 using the shared OAuth token.
  * @param path     e.g. '/formulary/ndc/12345-6789'
  * @param params   Query string parameters.
  */
 export async function odgGet<T>(
-  company: CompanyRow,
   path: string,
   params?: Record<string, string | string[] | number | boolean | undefined>,
 ): Promise<T> {
@@ -138,12 +127,8 @@ export async function odgGet<T>(
     const fullUrl = client.getUri({ url: path, params });
     console.log(`[ODG REQ] GET ${fullUrl}`);
   }
-  const config: AxiosRequestConfig & { _company: CompanyRow } = {
-    params,
-    _company: company,
-  };
   try {
-    const response = await client.get<T>(path, config);
+    const response = await client.get<T>(path, { params } as AxiosRequestConfig);
     if (debug) {
       const lines = JSON.stringify(response.data, null, 2).split('\n');
       const limit = getPayloadDumpRowLimit();
@@ -160,10 +145,9 @@ export async function odgGet<T>(
 }
 
 /**
- * Makes a POST request to ODG API v1.2 on behalf of a specific company.
+ * Makes a POST request to ODG API v1.2 using the shared OAuth token.
  */
 export async function odgPost<T>(
-  company: CompanyRow,
   path: string,
   body: unknown,
 ): Promise<T> {
@@ -173,11 +157,8 @@ export async function odgPost<T>(
     const fullUrl = client.getUri({ url: path });
     console.log(`[ODG REQ] POST ${fullUrl}\n${JSON.stringify(body, null, 2)}`);
   }
-  const config: AxiosRequestConfig & { _company: CompanyRow } = {
-    _company: company,
-  };
   try {
-    const response = await client.post<T>(path, body, config);
+    const response = await client.post<T>(path, body);
     if (debug) {
       const lines = JSON.stringify(response.data, null, 2).split('\n');
       const limit = getPayloadDumpRowLimit();

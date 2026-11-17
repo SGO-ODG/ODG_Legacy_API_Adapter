@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { CompanyRow } from '../db/companymaster';
 import { SubscriptionRow } from '../db/companywebservice';
 import { odgGet, UpstreamError } from '../upstream/odgClient';
 import { OdgTaoResponse, OdgTaoProcedure, OdgTaoItemGroup, OdgTaoProceduresResponse, OdgTaoFnolResponse } from '../types/odg';
@@ -101,7 +100,6 @@ export function parseUraParams(
  * /tao/icds call is needed.
  */
 async function fetchFnolTaoData(
-  company: CompanyRow,
   ctx: UraContext,
 ): Promise<OdgTaoResponse> {
   const params: Record<string, string | string[]> = {
@@ -112,7 +110,7 @@ async function fetchFnolTaoData(
   if (ctx.clientid) params.ClientId = ctx.clientid;
   let data: OdgTaoFnolResponse;
   try {
-    data = await odgGet<OdgTaoFnolResponse>(company, `/tao/fnol/${ctx.bp}/${ctx.noi}`, params);
+    data = await odgGet<OdgTaoFnolResponse>(`/tao/fnol/${ctx.bp}/${ctx.noi}`, params);
   } catch (err) {
     if (err instanceof UpstreamError) {
       throw new LegacyError(ERRORS.INVALID_CODES());
@@ -128,7 +126,6 @@ async function fetchFnolTaoData(
 }
 
 async function fetchTaoIcds(
-  company: CompanyRow,
   ctx: UraContext,
   icds: string[],
 ): Promise<OdgTaoResponse> {
@@ -145,11 +142,10 @@ async function fetchTaoIcds(
   if (ctx.flags) params.Flags = ctx.flags.split('');
   if (ctx.clientid) params.ClientId = ctx.clientid;
 
-  return odgGet<OdgTaoResponse>(company, '/tao/icds', params);
+  return odgGet<OdgTaoResponse>('/tao/icds', params);
 }
 
 async function fetchTaoProcedures(
-  company: CompanyRow,
   ctx: UraContext,
 ): Promise<OdgTaoProceduresResponse> {
   const params: Record<string, string | string[] | undefined> = {
@@ -161,7 +157,7 @@ async function fetchTaoProcedures(
   if (ctx.flags) params.Flags = ctx.flags.split('');
   if (ctx.clientid) params.ClientId = ctx.clientid;
 
-  return odgGet<OdgTaoProceduresResponse>(company, '/tao/procedures', params);
+  return odgGet<OdgTaoProceduresResponse>('/tao/procedures', params);
 }
 
 // ─── Response transformation ──────────────────────────────────────────────────
@@ -297,7 +293,6 @@ export interface UraResult {
 }
 
 export async function handleUrAdvisor(
-  company: CompanyRow,
   ctx: UraContext,
 ): Promise<UraResult> {
   let icds = ctx.icds;
@@ -306,15 +301,15 @@ export async function handleUrAdvisor(
 
   if (ctx.icdLookupMode) {
     // icd=9|10: reverse lookup — procedure → ICDs
-    const data = await fetchTaoProcedures(company, ctx);
+    const data = await fetchTaoProcedures(ctx);
     records = buildUraProcedureRecords(data, ctx);
   } else if (icds.length === 0 && ctx.bp && ctx.noi) {
     // Only BP/NOI given — FNOL response already contains full TAO data
-    const data = await fetchFnolTaoData(company, ctx);
+    const data = await fetchFnolTaoData(ctx);
     records = buildUraRecords(data, ctx);
   } else {
     try {
-      const data = await fetchTaoIcds(company, ctx, icds);
+      const data = await fetchTaoIcds(ctx, icds);
       records = buildUraRecords(data, ctx);
     } catch (err) {
       // A 404 from ODG means the ICD(s) returned no data.
@@ -334,7 +329,7 @@ export async function handleUrAdvisor(
         (r.icdStats && r.icdStats.length > 0),
     );
     if (!hasTaoResults && ctx.bp && ctx.noi) {
-      const fnolData = await fetchFnolTaoData(company, ctx);
+      const fnolData = await fetchFnolTaoData(ctx);
       records = buildUraRecords(fnolData, ctx);
     }
   }

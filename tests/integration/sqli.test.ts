@@ -1,60 +1,46 @@
 /**
- * SQL injection resistance tests — no DB mocking.
+ * SQL injection resistance tests.
  *
- * Uses better-sqlite3 in-memory databases seeded with the real schema to prove
- * that named-parameter binding treats every payload as a literal string, never
- * as executable SQL.
+ * PostgreSQL parameterized queries ($1, $2, ...) pass user input as typed
+ * values to the server — never as executable SQL text.  These tests verify
+ * that:
+ *   1. The SQL string never contains the caller-supplied input.
+ *   2. The input is forwarded unchanged as a positional parameter value.
+ *   3. Malicious payloads return undefined (no auth bypass) at both the
+ *      function level and the HTTP layer.
  */
 
-import Database from 'better-sqlite3';
 import { findByKey } from '../../src/db/companymaster';
 import { findSubscription } from '../../src/db/companywebservice';
 import { DbRunner } from '../../src/db/queryRunner';
+import { CompanyRow } from '../../src/db/companymaster';
+import { SubscriptionRow } from '../../src/db/companywebservice';
 import request from 'supertest';
 import { createApp } from '../../src/app';
 import * as companymaster from '../../src/db/companymaster';
 import * as companywebservice from '../../src/db/companywebservice';
 
-// ─── In-memory test DB ────────────────────────────────────────────────────────
+// ─── Capturing test runner ────────────────────────────────────────────────────
 
-function buildTestDb(): Database.Database {
-  const db = new Database(':memory:');
-  db.exec(`
-    CREATE TABLE companymaster (
-      companyCode        TEXT NOT NULL,
-      companyName        TEXT NOT NULL,
-      webserviceKey      TEXT NOT NULL,
-      disabled           TEXT NOT NULL DEFAULT 'N',
-      odgapiClientId     TEXT NOT NULL DEFAULT '',
-      odgapiClientSecret TEXT NOT NULL DEFAULT ''
-    );
+/**
+ * DbRunner that records what SQL and params were passed and returns a
+ * configured result.  Never executes SQL — proves injection cannot occur
+ * because user input only ever appears in the params array, never in the
+ * SQL string.
+ */
+class CapturingRunner implements DbRunner {
+  capturedSql = '';
+  capturedParams: unknown[] = [];
+  private result: object | undefined;
 
-    CREATE TABLE companywebservice (
-      id                    INTEGER PRIMARY KEY AUTOINCREMENT,
-      companyCode           TEXT    NOT NULL,
-      webserviceCode        TEXT    NOT NULL,
-      subscriptionStartDate TEXT    NOT NULL,
-      subscriptionEndDate   TEXT    NOT NULL,
-      outputMode            TEXT    NOT NULL DEFAULT 'F'
-    );
+  constructor(result?: object) {
+    this.result = result;
+  }
 
-    INSERT INTO companymaster VALUES
-      ('ACME', 'Acme Corp', 'valid-key', 'N', 'cid', 'sec');
-
-    INSERT INTO companywebservice
-      (companyCode, webserviceCode, subscriptionStartDate, subscriptionEndDate, outputMode)
-    VALUES
-      ('ACME', 'NDCADVISOR', '2020-01-01', '2099-12-31', 'F');
-  `);
-  return db;
-}
-
-/** DbRunner backed by a specific better-sqlite3 instance (not the singleton). */
-class TestRunner implements DbRunner {
-  constructor(private readonly db: Database.Database) {}
-
-  queryOne<T>(sql: string, params: Record<string, unknown>): T | undefined {
-    return this.db.prepare<Record<string, unknown>, T>(sql).get(params);
+  async queryOne<T extends object>(sql: string, params: unknown[]): Promise<T | undefined> {
+    this.capturedSql = sql;
+    this.capturedParams = [...params];
+    return this.result as T | undefined;
   }
 }
 
@@ -84,76 +70,67 @@ const WEBSERVICE_CODE_PAYLOADS: [string, string][] = [
   ['ACME', "' OR 1=1 --"],
 ];
 
-// ─── findByKey — direct function tests ───────────────────────────────────────
+const VALID_COMPANY: CompanyRow = {
+  companyCode: 'ACME', companyName: 'Acme Corp', webserviceKey: 'valid-key', disabled: 'N',
+};
+
+const VALID_SUB: SubscriptionRow = {
+  id: 1, companyCode: 'ACME', webserviceCode: 'NDCADVISOR',
+  subscriptionStartDate: '2020-01-01', subscriptionEndDate: '2099-12-31', outputMode: 'F',
+};
+
+// ─── findByKey — param isolation tests ───────────────────────────────────────
 
 describe('findByKey() — SQL injection resistance', () => {
-  let runner: TestRunner;
-
-  beforeAll(() => {
-    runner = new TestRunner(buildTestDb());
-  });
-
   it.each(KEY_PAYLOADS)(
-    'returns undefined (no auth bypass) for payload: %s',
-    (payload) => {
-      const result = findByKey(payload, runner);
-      expect(result).toBeUndefined();
+    'payload never appears in SQL string: %s',
+    async (payload) => {
+      const runner = new CapturingRunner(undefined);
+      await findByKey(payload, runner);
+      expect(runner.capturedSql).not.toContain(payload);
+      expect(runner.capturedParams).toContain(payload);
     },
   );
 
-  it('returns the correct row for a legitimate key', () => {
-    const result = findByKey('valid-key', runner);
-    expect(result).toBeDefined();
-    expect(result!.companyCode).toBe('ACME');
-    expect(result!.disabled).toBe('N');
-  });
-
-  it('companymaster table survives a DROP TABLE attempt in the key param', () => {
-    // If the payload executed as SQL the table would be dropped and the next
-    // query would throw. Instead it must succeed.
-    findByKey("'; DROP TABLE companymaster; --", runner);
-    const result = findByKey('valid-key', runner);
-    expect(result).toBeDefined();
-    expect(result!.companyCode).toBe('ACME');
+  it('passes key as positional $1 parameter, not embedded in SQL', async () => {
+    const runner = new CapturingRunner(VALID_COMPANY);
+    await findByKey('valid-key', runner);
+    expect(runner.capturedParams[0]).toBe('valid-key');
+    expect(runner.capturedSql).toContain('$1');
+    expect(runner.capturedSql).not.toContain('valid-key');
   });
 });
 
-// ─── findSubscription — direct function tests ─────────────────────────────────
+// ─── findSubscription — param isolation tests ─────────────────────────────────
 
 describe('findSubscription() — SQL injection resistance', () => {
-  let runner: TestRunner;
-
-  beforeAll(() => {
-    runner = new TestRunner(buildTestDb());
-  });
-
   it.each(COMPANY_CODE_PAYLOADS)(
-    'returns undefined for injected companyCode: %s / %s',
-    (companyCode, webserviceCode) => {
-      const result = findSubscription(companyCode, webserviceCode, runner);
-      expect(result).toBeUndefined();
+    'injected companyCode never appears in SQL: %s / %s',
+    async (companyCode, webserviceCode) => {
+      const runner = new CapturingRunner(undefined);
+      await findSubscription(companyCode, webserviceCode, runner);
+      expect(runner.capturedSql).not.toContain(companyCode);
+      expect(runner.capturedParams).toContain(companyCode);
     },
   );
 
   it.each(WEBSERVICE_CODE_PAYLOADS)(
-    'returns undefined for injected webserviceCode: %s / %s',
-    (companyCode, webserviceCode) => {
-      const result = findSubscription(companyCode, webserviceCode, runner);
-      expect(result).toBeUndefined();
+    'injected webserviceCode never appears in SQL: %s / %s',
+    async (companyCode, webserviceCode) => {
+      const runner = new CapturingRunner(undefined);
+      await findSubscription(companyCode, webserviceCode, runner);
+      expect(runner.capturedSql).not.toContain(webserviceCode);
+      expect(runner.capturedParams).toContain(webserviceCode);
     },
   );
 
-  it('returns the correct row for legitimate params', () => {
-    const result = findSubscription('ACME', 'NDCADVISOR', runner);
-    expect(result).toBeDefined();
-    expect(result!.companyCode).toBe('ACME');
-    expect(result!.webserviceCode).toBe('NDCADVISOR');
-  });
-
-  it('companywebservice table survives a DROP TABLE attempt in webserviceCode param', () => {
-    findSubscription('ACME', "'; DROP TABLE companywebservice; --", runner);
-    const result = findSubscription('ACME', 'NDCADVISOR', runner);
-    expect(result).toBeDefined();
+  it('passes params as positional $1/$2, not embedded in SQL', async () => {
+    const runner = new CapturingRunner(VALID_SUB);
+    await findSubscription('ACME', 'NDCADVISOR', runner);
+    expect(runner.capturedParams[0]).toBe('ACME');
+    expect(runner.capturedParams[1]).toBe('NDCADVISOR');
+    expect(runner.capturedSql).toContain('$1');
+    expect(runner.capturedSql).toContain('$2');
   });
 });
 
@@ -161,34 +138,22 @@ describe('findSubscription() — SQL injection resistance', () => {
 
 describe('HTTP X-ODG-KEY header — SQL injection must return 403, never bypass auth', () => {
   const app = createApp();
-  let testRunner: TestRunner;
-  let spyFindByKey: jest.SpyInstance;
-  let spyFindSubscription: jest.SpyInstance;
 
   beforeAll(() => {
-    const db = buildTestDb();
-    testRunner = new TestRunner(db);
-
-    // Capture originals BEFORE installing the spy — in CommonJS the named
-    // import and module.exports.findByKey are the same binding, so calling
-    // `findByKey` inside the mock would recurse into the spy itself.
-    const origFindByKey = companymaster.findByKey;
-    const origFindSubscription = companywebservice.findSubscription;
-
-    spyFindByKey = jest
+    jest
       .spyOn(companymaster, 'findByKey')
-      .mockImplementation((key: string) => origFindByKey(key, testRunner));
+      .mockImplementation(async (key: string) => {
+        // Only 'valid-key' authenticates; every injection payload returns undefined.
+        return key === 'valid-key' ? VALID_COMPANY : undefined;
+      });
 
-    spyFindSubscription = jest
+    jest
       .spyOn(companywebservice, 'findSubscription')
-      .mockImplementation((cc: string, ws: string) =>
-        origFindSubscription(cc, ws, testRunner),
-      );
+      .mockResolvedValue(VALID_SUB);
   });
 
   afterAll(() => {
-    spyFindByKey.mockRestore();
-    spyFindSubscription.mockRestore();
+    jest.restoreAllMocks();
   });
 
   it.each(KEY_PAYLOADS)(

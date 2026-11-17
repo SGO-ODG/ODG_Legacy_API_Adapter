@@ -1,4 +1,3 @@
-import { CompanyRow } from '../db/companymaster';
 import { odgPost, UpstreamError } from '../upstream/odgClient';
 import { OdgCalculatorResponse } from '../types/odg';
 import { LegacyCalculatorResponse, LegacyCalcIcdCodeItem, LegacyFormat } from '../types/legacy';
@@ -438,7 +437,6 @@ export function mapCalcResponse(
 // ─── Main handlers ────────────────────────────────────────────────────────────
 
 export async function handleComorbidity(
-  company: CompanyRow,
   raw: Buffer | string,
   format: LegacyFormat = 'xml',
 ): Promise<LegacyCalculatorResponse> {
@@ -446,7 +444,7 @@ export async function handleComorbidity(
   // TODO/confirm: requestedoutput enum value for comorbidity
   const body = buildCalcRequest(input, 'RasAndRtw');
   try {
-    const data = await odgPost<OdgCalculatorResponse>(company, '/calculator', body);
+    const data = await odgPost<OdgCalculatorResponse>('/calculator', body);
     return mapCalcResponse(data, input, format, 'comorbidity');
   } catch (err) {
     // FNOL codes that ODG cannot resolve to a valid ICD → upstream returns 404.
@@ -459,7 +457,6 @@ export async function handleComorbidity(
 }
 
 export async function handleReserve(
-  company: CompanyRow,
   raw: Buffer | string,
   format: LegacyFormat = 'xml',
 ): Promise<LegacyCalculatorResponse> {
@@ -467,7 +464,7 @@ export async function handleReserve(
   // TODO/confirm: requestedoutput enum value for reserve
   const body = buildCalcRequest(input, 'RasRtwCosts');
   try {
-    const data = await odgPost<OdgCalculatorResponse>(company, '/calculator', body);
+    const data = await odgPost<OdgCalculatorResponse>('/calculator', body);
     return mapCalcResponse(data, input, format, 'reserve');
   } catch (err) {
     // FNOL codes that ODG cannot resolve to a valid ICD → upstream returns 404.

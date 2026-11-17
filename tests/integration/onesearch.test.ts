@@ -21,8 +21,7 @@ const mockLookup = serviceRegistry.lookupServiceCode as jest.MockedFunction<type
 const mockOdgGet = odgClient.odgGet as jest.MockedFunction<typeof odgClient.odgGet>;
 
 const VALID_COMPANY: companymaster.CompanyRow = {
-  companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key',
-  disabled: 'N', odgapiClientId: 'cid', odgapiClientSecret: 'sec',
+  companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key', disabled: 'N',
 };
 const VALID_SUB: companywebservice.SubscriptionRow = {
   id: 1, companyCode: 'ACME', webserviceCode: 'ONESEARCH',
@@ -48,8 +47,8 @@ const app = createApp();
 beforeEach(() => {
   jest.clearAllMocks();
   mockLookup.mockReturnValue('ONESEARCH');
-  mockFindByKey.mockReturnValue(VALID_COMPANY);
-  mockFindSub.mockReturnValue(VALID_SUB);
+  mockFindByKey.mockResolvedValue(VALID_COMPANY);
+  mockFindSub.mockResolvedValue(VALID_SUB);
 });
 
 describe('One Search auth errors', () => {

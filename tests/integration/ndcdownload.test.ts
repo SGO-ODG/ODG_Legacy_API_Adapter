@@ -21,8 +21,7 @@ const mockLookup = serviceRegistry.lookupServiceCode as jest.MockedFunction<type
 const mockOdgGet = odgClient.odgGet as jest.MockedFunction<typeof odgClient.odgGet>;
 
 const VALID_COMPANY: companymaster.CompanyRow = {
-  companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key',
-  disabled: 'N', odgapiClientId: 'cid', odgapiClientSecret: 'sec',
+  companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key', disabled: 'N',
 };
 const VALID_SUB: companywebservice.SubscriptionRow = {
   id: 1, companyCode: 'ACME', webserviceCode: 'NDCDOWNLOAD',
@@ -41,8 +40,8 @@ const app = createApp();
 beforeEach(() => {
   jest.clearAllMocks();
   mockLookup.mockReturnValue('NDCDOWNLOAD');
-  mockFindByKey.mockReturnValue(VALID_COMPANY);
-  mockFindSub.mockReturnValue(VALID_SUB);
+  mockFindByKey.mockResolvedValue(VALID_COMPANY);
+  mockFindSub.mockResolvedValue(VALID_SUB);
 });
 
 describe('NDC Download', () => {
@@ -58,7 +57,7 @@ describe('NDC Download', () => {
       .set('X-ODG-KEY', 'valid-key');
     expect(res.status).toBe(200);
     expect(res.type).toMatch(/xml/);
-    expect(res.text).toContain('<ndcCode>12345-6789</ndcCode>');
+    expect(res.text).toContain('<ndccode>12345-6789</ndccode>');
     expect(res.text).toContain('<rescount>1</rescount>');
   });
 
