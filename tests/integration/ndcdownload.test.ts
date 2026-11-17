@@ -22,7 +22,6 @@ const mockOdgGet = odgClient.odgGet as jest.MockedFunction<typeof odgClient.odgG
 
 const VALID_COMPANY: companymaster.CompanyRow = {
   companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key',
-  disabled: 'N', odgapiClientId: 'cid', odgapiClientSecret: 'sec',
 };
 const VALID_SUB: companywebservice.SubscriptionRow = {
   id: 1, companyCode: 'ACME', webserviceCode: 'NDCDOWNLOAD',

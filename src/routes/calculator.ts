@@ -23,7 +23,7 @@ router.post(
     try {
       const format = getLegacyFormat(res);
       const raw: Buffer | string = req.body ?? '';
-      const result = await handleComorbidity(req.legacy!.company, raw, format);
+      const result = await handleComorbidity(raw, format);
       const model = buildCalcModel(result);
       sendLegacyResponse(res, model, format);
     } catch (err) {
@@ -53,7 +53,7 @@ router.post(
     try {
       const format = getLegacyFormat(res);
       const raw: Buffer | string = req.body ?? '';
-      const result = await handleReserve(req.legacy!.company, raw, format);
+      const result = await handleReserve(raw, format);
       const model = buildCalcModel(result);
       sendLegacyResponse(res, model, format);
     } catch (err) {

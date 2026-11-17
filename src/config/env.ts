@@ -21,6 +21,10 @@ const envSchema = z.object({
     .transform((v) => v.toLowerCase() === 'true')
     .default('false'),
 
+  // Client credentials for ODG API OAuth — shared across all companies.
+  ODG_API_CLIENT_ID: z.string().min(1),
+  ODG_API_CLIENT_SECRET: z.string().min(1),
+
   // Base URL of the ODG API v1.2 (e.g. https://api.odgbymcg.com).
   ODG_API_BASE_URL: z.string().url(),
   // Sent as the X-ApiVersion header on every upstream request.

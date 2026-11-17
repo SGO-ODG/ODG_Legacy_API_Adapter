@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { CompanyRow } from '../db/companymaster';
 import { odgGet } from '../upstream/odgClient';
 import { OdgGuidelineRecord } from '../types/odg';
 import { LegacyBpGuideRecord } from '../types/legacy';
@@ -61,12 +60,11 @@ export function parseBpGuideParams(
  * TODO/confirm: same FNOL resolution as UR Advisor — schema unconfirmed.
  */
 async function resolveFnolToIcds(
-  company: CompanyRow,
   bp: string,
   noi: string,
 ): Promise<string[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data = await odgGet<any>(company, `/tao/fnol/${bp}/${noi}`);
+  const data = await odgGet<any>(`/tao/fnol/${bp}/${noi}`);
   const candidates: string[] = Array.isArray(data?.icds) ? data.icds : [];
   if (candidates.length === 0) {
     throw new LegacyError(ERRORS.INVALID_FNOL());
@@ -75,7 +73,6 @@ async function resolveFnolToIcds(
 }
 
 async function fetchGuidelines(
-  company: CompanyRow,
   icds: string[],
 ): Promise<OdgGuidelineRecord[]> {
   const params: Record<string, string[]> = { icd9: [], icd10: [] };
@@ -89,7 +86,7 @@ async function fetchGuidelines(
   if (params.icd9.length === 0) delete params.icd9;
   if (params.icd10.length === 0) delete params.icd10;
 
-  return odgGet<OdgGuidelineRecord[]>(company, '/guidelines', params);
+  return odgGet<OdgGuidelineRecord[]>('/guidelines', params);
 }
 
 // ─── Response transformation ──────────────────────────────────────────────────
@@ -142,16 +139,15 @@ export interface BpGuideResult {
 }
 
 export async function handleBpGuide(
-  company: CompanyRow,
   ctx: BpGuideContext,
 ): Promise<BpGuideResult> {
   let icds = ctx.icds;
 
   if (icds.length === 0 && ctx.bp && ctx.noi) {
-    icds = await resolveFnolToIcds(company, ctx.bp, ctx.noi);
+    icds = await resolveFnolToIcds(ctx.bp, ctx.noi);
   }
 
-  const raw = await fetchGuidelines(company, icds);
+  const raw = await fetchGuidelines(icds);
   // ODG /guidelines returns a single record object for one ICD or an array for many.
   // Normalize to array in both cases.
   const guidelineArray: OdgGuidelineRecord[] = Array.isArray(raw)

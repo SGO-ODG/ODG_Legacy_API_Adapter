@@ -34,8 +34,6 @@ const ACTIVE_COMPANY: companymaster.CompanyRow = {
   companyName: 'Acme Corp',
   webserviceKey: 'valid-key',
   disabled: 'N',
-  odgapiClientId: 'client-id',
-  odgapiClientSecret: 'secret',
 };
 
 const ACTIVE_SUB: companywebservice.SubscriptionRow = {

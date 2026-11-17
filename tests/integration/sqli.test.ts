@@ -71,8 +71,7 @@ const WEBSERVICE_CODE_PAYLOADS: [string, string][] = [
 ];
 
 const VALID_COMPANY: CompanyRow = {
-  companyCode: 'ACME', companyName: 'Acme Corp', webserviceKey: 'valid-key',
-  disabled: 'N', odgapiClientId: 'cid', odgapiClientSecret: 'sec',
+  companyCode: 'ACME', companyName: 'Acme Corp', webserviceKey: 'valid-key', disabled: 'N',
 };
 
 const VALID_SUB: SubscriptionRow = {

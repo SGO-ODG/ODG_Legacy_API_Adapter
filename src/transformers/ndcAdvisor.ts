@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { CompanyRow } from '../db/companymaster';
 import { odgGet } from '../upstream/odgClient';
 import { OdgNdcResponse, OdgNdcInfo, OdgPbsResponse, OdgPbsInfo } from '../types/odg';
 import { LegacyNdcRecord, LegacyPbsRecord } from '../types/legacy';
@@ -63,45 +62,43 @@ export function parseNdcAdvisorParams(query: Record<string, string | string[] | 
 // ─── Upstream calls ───────────────────────────────────────────────────────────
 
 async function fetchUsNdc(
-  company: CompanyRow,
   ctx: NdcAdvisorContext,
 ): Promise<OdgNdcInfo[]> {
   if (ctx.isKeyword) {
     // Alphabetic → keyword search
     const keyword = ctx.codes.join(' ');
-    const data = await odgGet<OdgNdcResponse>(company, '/formulary/ndc', { keyword });
+    const data = await odgGet<OdgNdcResponse>('/formulary/ndc', { keyword });
     return data.ndcInformation ?? [];
   }
 
   if (ctx.codes.length === 1) {
     // Single numeric code → /formulary/ndc/{ndcCode}
     const code = normalizeNdc(ctx.codes[0]);
-    const data = await odgGet<OdgNdcResponse>(company, `/formulary/ndc/${code}`);
+    const data = await odgGet<OdgNdcResponse>(`/formulary/ndc/${code}`);
     return data.ndcInformation ?? [];
   }
 
   // Multiple numeric codes → /formulary/ndc?ndc=<each>
   const normalized = ctx.codes.map(normalizeNdc).filter((c) => c.length > 0);
-  const data = await odgGet<OdgNdcResponse>(company, '/formulary/ndc', { ndc: normalized });
+  const data = await odgGet<OdgNdcResponse>('/formulary/ndc', { ndc: normalized });
   return data.ndcInformation ?? [];
 }
 
 async function fetchAuPbs(
-  company: CompanyRow,
   ctx: NdcAdvisorContext,
 ): Promise<OdgPbsInfo[]> {
   if (ctx.isKeyword) {
     const keyword = ctx.codes.join(' ');
-    const data = await odgGet<OdgPbsResponse>(company, '/formulary/pbs', { keyword });
+    const data = await odgGet<OdgPbsResponse>('/formulary/pbs', { keyword });
     return data.pbsInformation ?? [];
   }
 
   if (ctx.codes.length === 1) {
-    const data = await odgGet<OdgPbsResponse>(company, `/formulary/pbs/${ctx.codes[0]}`);
+    const data = await odgGet<OdgPbsResponse>(`/formulary/pbs/${ctx.codes[0]}`);
     return data.pbsInformation ?? [];
   }
 
-  const data = await odgGet<OdgPbsResponse>(company, '/formulary/pbs', { pbs: ctx.codes });
+  const data = await odgGet<OdgPbsResponse>('/formulary/pbs', { pbs: ctx.codes });
   return data.pbsInformation ?? [];
 }
 
@@ -147,7 +144,6 @@ export interface NdcAdvisorResult {
 }
 
 export async function handleNdcAdvisor(
-  company: CompanyRow,
   ctx: NdcAdvisorContext,
 ): Promise<NdcAdvisorResult> {
   // NOTE: output=F (fullOutput) requests procsummary, but Procedure Summary is EOL.
@@ -155,14 +151,14 @@ export async function handleNdcAdvisor(
   // For now: fullOutput is accepted but procsummary is not added to the response.
 
   if (ctx.country === 'AU') {
-    const items = await fetchAuPbs(company, ctx);
+    const items = await fetchAuPbs(ctx);
     if (items.length === 0) {
       throw new LegacyError(ERRORS.NO_RESULTS('PBS codes'));
     }
     return { records: items.map(mapPbsInfo), clientid: ctx.clientid };
   }
 
-  const items = await fetchUsNdc(company, ctx);
+  const items = await fetchUsNdc(ctx);
   if (items.length === 0) {
     const noResultMsg = ctx.codes.length === 1 ? 'Drug Codes' : 'NDC codes';
     throw new LegacyError(ERRORS.NO_RESULTS(noResultMsg));

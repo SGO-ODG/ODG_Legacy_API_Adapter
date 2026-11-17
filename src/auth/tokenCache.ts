@@ -1,4 +1,3 @@
-import { CompanyRow } from '../db/companymaster';
 import { fetchToken, TokenResponse } from './tokenClient';
 import { getEnv, isDebugEnabled } from '../config/env';
 
@@ -15,16 +14,14 @@ const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<TokenResponse>>();
 
 /**
- * Builds a non-secret cache key that identifies the token configuration.
- * Uses companyCode + tokenUrl + clientId + audience + scopes.
+ * Builds a non-secret cache key from the shared OAuth configuration.
  * clientSecret is intentionally excluded.
  */
-function buildCacheKey(company: CompanyRow): string {
+function buildCacheKey(): string {
   const env = getEnv();
   return [
-    company.companyCode,
     env.OAUTH_TOKEN_URL,
-    company.odgapiClientId,
+    env.ODG_API_CLIENT_ID,
     env.OAUTH_AUDIENCE ?? '',
     env.OAUTH_SCOPES ?? '',
   ].join('::');
@@ -40,9 +37,9 @@ function skewSeconds(expiresIn: number): number {
   return Math.min(configured, Math.floor(expiresIn * 0.1));
 }
 
-/** Returns a valid bearer token for the company, refreshing if needed. */
-export async function getToken(company: CompanyRow): Promise<string> {
-  const key = buildCacheKey(company);
+/** Returns the shared bearer token, refreshing if near expiry. */
+export async function getToken(): Promise<string> {
+  const key = buildCacheKey();
   const entry = cache.get(key);
 
   if (entry) {
@@ -50,35 +47,36 @@ export async function getToken(company: CompanyRow): Promise<string> {
     if (Date.now() < entry.expiresAt - skew) {
       if (isDebugEnabled()) {
         const ttl = Math.round((entry.expiresAt - skew - Date.now()) / 1000);
-        console.log(`[TOKEN CACHE] HIT company:${company.companyCode} ttl:${ttl}s`);
+        console.log(`[TOKEN CACHE] HIT ttl:${ttl}s`);
       }
       return entry.accessToken;
     }
     if (isDebugEnabled()) {
-      console.log(`[TOKEN CACHE] EXPIRED company:${company.companyCode} — refreshing`);
+      console.log(`[TOKEN CACHE] EXPIRED — refreshing`);
     }
   } else if (isDebugEnabled()) {
-    console.log(`[TOKEN CACHE] MISS company:${company.companyCode} — fetching new token`);
+    console.log(`[TOKEN CACHE] MISS — fetching new token`);
   }
 
-  return refreshToken(company, key);
+  return refreshToken(key);
 }
 
-/** Invalidates a cached token (called on upstream 401). */
-export function invalidateToken(company: CompanyRow): void {
-  const key = buildCacheKey(company);
+/** Invalidates the cached shared token (called on upstream 401). */
+export function invalidateToken(): void {
+  const key = buildCacheKey();
   cache.delete(key);
 }
 
-async function refreshToken(company: CompanyRow, key: string): Promise<string> {
-  // Single-flight: if a refresh is already in progress for this key, await it
+async function refreshToken(key: string): Promise<string> {
+  // Single-flight: if a refresh is already in progress, await it
   const existing = inFlight.get(key);
   if (existing) {
     const result = await existing;
     return result.accessToken;
   }
 
-  const promise = fetchToken(company.odgapiClientId, company.odgapiClientSecret);
+  const env = getEnv();
+  const promise = fetchToken(env.ODG_API_CLIENT_ID, env.ODG_API_CLIENT_SECRET);
   inFlight.set(key, promise);
 
   try {

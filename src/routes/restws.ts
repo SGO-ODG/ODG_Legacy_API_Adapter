@@ -49,7 +49,7 @@ router.get(
       const ctx = parseNdcAdvisorParams(
         req.query as Record<string, string | string[] | undefined>,
       );
-      const result = await handleNdcAdvisor(req.legacy!.company, ctx);
+      const result = await handleNdcAdvisor(ctx);
       const model = buildNdcAdvisorModel(result);
       sendLegacyResponse(res, model, format);
     } catch (err) {
@@ -92,7 +92,7 @@ router.get(
         return;
       }
 
-      const records = await fetchAllNdcRecords(req.legacy!.company);
+      const records = await fetchAllNdcRecords();
 
       if (records.length === 0) {
         sendLegacyError(res, ERRORS.NO_RESULTS('NDC codes'));
@@ -145,7 +145,7 @@ router.get(
         ...(req.query as Record<string, string | string[] | undefined>),
       };
       ctx = parseUraParams(merged, req.legacy!.subscription);
-      const result = await handleUrAdvisor(req.legacy!.company, ctx);
+      const result = await handleUrAdvisor(ctx);
 
       if (format === 'json') {
         const jsonRecords = result.records.map((rec) =>
@@ -212,7 +212,7 @@ router.get(
         ...(req.query as Record<string, string | string[] | undefined>),
       };
       const ctx = parseBpGuideParams(merged);
-      const result = await handleBpGuide(req.legacy!.company, ctx);
+      const result = await handleBpGuide(ctx);
       if (format === 'json') {
         if (result.clientid) {
           // PHP mixes numeric-indexed records with string keys rescount+clientid,
@@ -264,7 +264,7 @@ router.post(
       if (isDebugEnabled()) {
         console.log(`[LEGACY PARSED] text="${ctx.text}" types=${JSON.stringify(ctx.types)}`);
       }
-      const result = await handleOneSearch(req.legacy!.company, ctx);
+      const result = await handleOneSearch(ctx);
       if (format === 'json') {
         res.status(200).json(buildOneSearchJsonBody(result));
       } else {

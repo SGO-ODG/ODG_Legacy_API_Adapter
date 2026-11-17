@@ -22,7 +22,6 @@ const mockOdgPost = odgClient.odgPost as jest.MockedFunction<typeof odgClient.od
 
 const VALID_COMPANY: companymaster.CompanyRow = {
   companyCode: 'ACME', companyName: 'Acme', webserviceKey: 'valid-key',
-  disabled: 'N', odgapiClientId: 'cid', odgapiClientSecret: 'sec',
 };
 
 function makeSub(ws: string): companywebservice.SubscriptionRow {

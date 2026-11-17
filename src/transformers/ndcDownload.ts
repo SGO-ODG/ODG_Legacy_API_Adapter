@@ -1,4 +1,3 @@
-import { CompanyRow } from '../db/companymaster';
 import { odgGet } from '../upstream/odgClient';
 import { OdgNdcResponse, OdgNdcInfo } from '../types/odg';
 import { LegacyNdcRecord } from '../types/legacy';
@@ -27,12 +26,12 @@ function mapNdcInfo(info: OdgNdcInfo): LegacyNdcRecord {
  * Fetches all NDC records by paging through /formulary/ndc until
  * totalRecords are collected.
  */
-export async function fetchAllNdcRecords(company: CompanyRow): Promise<LegacyNdcRecord[]> {
+export async function fetchAllNdcRecords(): Promise<LegacyNdcRecord[]> {
   const records: LegacyNdcRecord[] = [];
   let page = 1;
 
   // Fetch first page to discover totalRecords
-  const first = await odgGet<OdgNdcResponse>(company, '/formulary/ndc', {
+  const first = await odgGet<OdgNdcResponse>('/formulary/ndc', {
     page: 1,
     pageSize: PAGE_SIZE,
   });
@@ -45,7 +44,7 @@ export async function fetchAllNdcRecords(company: CompanyRow): Promise<LegacyNdc
 
   // Fetch remaining pages
   for (page = 2; page <= totalPages; page++) {
-    const resp = await odgGet<OdgNdcResponse>(company, '/formulary/ndc', {
+    const resp = await odgGet<OdgNdcResponse>('/formulary/ndc', {
       page,
       pageSize: PAGE_SIZE,
     });

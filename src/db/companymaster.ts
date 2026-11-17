@@ -5,13 +5,10 @@ export interface CompanyRow {
   companyName: string;
   webserviceKey: string;
   disabled: string;
-  odgapiClientId: string;
-  odgapiClientSecret: string;
 }
 
 const SQL = `
-  SELECT companyCode, companyName, webserviceKey, disabled,
-         odgapiClientId, odgapiClientSecret
+  SELECT companyCode, companyName, webserviceKey, disabled
   FROM   companymaster
   WHERE  webserviceKey = $1
   LIMIT  1
@@ -20,7 +17,7 @@ const SQL = `
 /**
  * Look up a company by its legacy API key.
  * Returns undefined when no match is found.
- * Never logs the key or secret.
+ * Never logs the key.
  *
  * @param runner  Injected for tests; defaults to the production PostgreSQL runner.
  */
