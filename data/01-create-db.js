@@ -92,8 +92,8 @@ const client = new Client({
       queryParameters      TEXT          DEFAULT NULL,
       clientId             VARCHAR(30)   DEFAULT NULL,
       resultCode           VARCHAR(5)    NOT NULL,
-      contentType          VARCHAR(255)  DEFAULT NULL,
-      acceptHeader         VARCHAR(255)  DEFAULT NULL,
+      contentType          VARCHAR(30)  DEFAULT NULL,
+      acceptHeader         VARCHAR(30)  DEFAULT NULL,
       serverResponseTime   INTEGER       DEFAULT NULL,
       CONSTRAINT pk_webserviceusage PRIMARY KEY (id)
     )
