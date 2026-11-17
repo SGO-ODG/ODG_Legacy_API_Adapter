@@ -1,7 +1,5 @@
 # Skip Files
 .env
-*.sqlite
-data/*.sqlite
 *.js.map
 *.xlsx
 
