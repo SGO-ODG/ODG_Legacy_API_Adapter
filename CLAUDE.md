@@ -52,11 +52,11 @@ Do not treat bundled `api/Key` and `api/Example` controllers as customer migrati
 - Keep upstream transformation logic separate by operation: parse legacy request -> validate legacy semantics -> build upstream request -> call ODG -> transform upstream response -> serialize legacy response.
 - Use a static service/route registry for recognized migrated legacy services. The old `webservicemaster` table is unavailable.
 
-## Available database data only
+## Database
 
-The adapter may access **only** these two validation tables. During initial development, they are stored in the local read-only SQLite database.
+The adapter uses **PostgreSQL** (Azure Database for PostgreSQL Flexible Server in production). Run `node data/01-create-db.js` once to create the tables. Connection is configured via `PG_*` environment variables.
 
-### `companymaster`
+### `companymaster` (read-only)
 
 ```text
 companyCode varchar(20) PK
@@ -65,13 +65,11 @@ webserviceKey varchar(50)
 disabled char(1)
 accountManagerEmail varchar(80)
 salesManagerEmail varchar(80)
-odgapiClientId varchar(50)
-odgapiClientSecret varchar(150)
 ```
 
-Use it to look up `webserviceKey`, reject `disabled = 'Y'`, obtain the validated company code, and select that company's OAuth client ID/secret. Never log or return the key or secret.
+Use it to look up `webserviceKey`, reject `disabled = 'Y'`, and obtain the validated company code. Never log or return the key.
 
-### `companywebservice`
+### `companywebservice` (read-only)
 
 ```text
 id int AI PK
@@ -84,31 +82,55 @@ outputMode varchar(1)
 
 Use it to validate the requested legacy service subscription, enforce the inclusive subscription dates, and supply subscription `outputMode` (notably UR Advisor full vs streamlined output).
 
-`webservicemaster` and `webserviceusage` are unavailable. Do not query them or create replacement database tables. Do not create local API-call audit or usage records. Database access is read-only; ODG API logs are the audit source.
+### `webserviceusage` (write-only)
 
-## Initial local development configuration
+```text
+id               serial PK
+companyCode      varchar(20)
+webserviceCode   varchar(20)
+clientHost       varchar(45)
+requestReceived  timestamptz DEFAULT CURRENT_TIMESTAMP
+requestBody      text
+queryParameters  text
+clientId         varchar(30)
+resultCode       varchar(5)
+contentType      varchar(255)
+acceptHeader     varchar(255)
+serverResponseTime integer
+```
 
-- For initial adapter development, connect to a local SQLite database containing only the two allowed tables. Use the existing PHP code only as a read-only behavioral reference; do not copy, print, commit, or expose its database credentials.
-- When creating the separate Express repository, add a committed `.env.example` and an ignored local `.env`. Do not create a real `.env` in this PHP reference repository.
-- Open the SQLite database in read-only mode and query only `companymaster` and `companywebservice`. Do not implement insert, update, delete, DDL, or any access to other tables.
-- Keep the OAuth token endpoint, audience, scopes, and actual customer client secrets in local secrets/deployment configuration. The `.env.example` contains placeholders only.
+One row is inserted after each authenticated legacy request completes (`usageLoggerMiddleware`). Controlled by `USAGE_LOGGING_ENABLED=Y` in `.env`. Fire-and-forget — errors are logged to stderr and never surface to the customer. `webservicemaster` is unavailable and is not used.
+
+## Local development configuration
+
+- Copy `.env.example` to `.env` and fill in real values. Never commit `.env`.
+- Run `node data/01-create-db.js` to create tables, then `node data/02-seed-test-company.js` to seed a test company.
+- ODG API credentials (`ODG_API_CLIENT_ID`, `ODG_API_CLIENT_SECRET`) are shared across all companies and live in `.env` only — they are **not** stored in the database.
+- Use the existing PHP code only as a read-only behavioral reference; do not copy, print, commit, or expose its database credentials.
 
 ```dotenv
-# Local development only — copy to .env in the Express repository and replace placeholders.
 NODE_ENV=development
 PORT=3000
 
-# Read-only SQLite database containing only companymaster and companywebservice.
-SQLITE_DATABASE_PATH=./data/legacy-subscriptions.sqlite
-SQLITE_READ_ONLY=true
+PG_HOST=localhost
+PG_PORT=5432
+PG_DATABASE=<pg-database>
+PG_USER=<pg-user>
+PG_PASSWORD=<pg-password>
+PG_SSL=false
 
-# New ODG API
+ODG_API_CLIENT_ID=<odg-api-client-id>
+ODG_API_CLIENT_SECRET=<odg-api-client-secret>
 ODG_API_BASE_URL=https://api.odgbymcg.com
 ODG_API_VERSION=1.2
 OAUTH_TOKEN_URL=<oauth_token_endpoint>
+OAUTH_GRANT_TYPE=client_credentials
 OAUTH_AUDIENCE=<audience_if_required>
 OAUTH_SCOPES=<space_delimited_scopes_if_required>
 OAUTH_TOKEN_EXPIRY_SKEW_SECONDS=60
+
+ODG_DEBUG_PAYLOADS=N
+USAGE_LOGGING_ENABLED=N
 
 # Development-only PHP contract reference; never required in production.
 LEGACY_PHP_REFERENCE_ROOT=C:\Saurabh\MyApps\Apache24\odgci_3.1.11
@@ -130,16 +152,17 @@ Run legacy validation before requesting an upstream token or calling ODG. Return
 
 The previous PHP maintenance response (`Web service is down for maintenance.`) is not reproduced because this bridge has no maintenance mode. Preserve endpoint-specific validation/status/body from the legacy contract, including `Invalid web service request format.`, `Invalid XML, unable to load...`, and endpoint-specific 404 no-result text. Map OAuth, network, timeout, and upstream errors to approved legacy errors; never pass them through.
 
-## Per-customer OAuth token reuse
+## OAuth token management
 
-- Obtain a client-credentials token only after legacy key/subscription validation, using that company's `odgapiClientId` and `odgapiClientSecret`.
+- ODG API credentials (`ODG_API_CLIENT_ID`, `ODG_API_CLIENT_SECRET`) are **single shared credentials** stored in `.env` — there are no per-company credentials.
+- A token is obtained after legacy key/subscription validation and cached in memory (`src/auth/tokenCache.ts`).
 - Do **not** obtain a token for every customer request.
-- Cache by a non-secret key that includes `companyCode`, token URL, client-ID identifier, audience, and scopes.
+- Cache key is built from `OAUTH_TOKEN_URL + ODG_API_CLIENT_ID + OAUTH_AUDIENCE + OAUTH_SCOPES` (non-secret).
 - Store bearer token and calculated expiry only; never log token values or secrets.
-- Respect the OAuth `expires_in` value (for example 3600 or 7200 seconds). Refresh shortly before expiry using a bounded safety skew, such as `min(60 seconds, 10% of lifetime)`.
-- Use a single-flight/in-flight-promise mechanism per cache key so concurrent requests share one refresh.
-- On upstream 401, invalidate that company's cache entry, obtain one new token, and retry the original upstream request once only.
-- Use a secure shared cache when running multiple Express instances; in-memory caching is sufficient only for one instance.
+- Respect the OAuth `expires_in` value. Refresh shortly before expiry using a bounded safety skew: `min(OAUTH_TOKEN_EXPIRY_SKEW_SECONDS, 10% of lifetime)`.
+- Use a single-flight/in-flight-promise mechanism so concurrent requests share one refresh.
+- On upstream 401, invalidate the cached token, obtain one new token, and retry the original request once only.
+- In-memory cache works for a single App Service instance. For multi-instance scale-out, replace with Azure Cache for Redis.
 
 ## Important mapping rules and known gaps
 
@@ -156,10 +179,28 @@ The previous PHP maintenance response (`Web service is down for maintenance.`) i
 ## Testing and delivery
 
 - Add contract tests for every supported route covering valid requests, invalid key, disabled account, unsubscribed customer, future/expired subscription, unsupported method, malformed XML, invalid request format, no results, and upstream failures.
-- In the new Express repository, test configuration validation using `.env.example`-compatible placeholders; never commit a populated `.env` or any PHP/production credentials.
+- Test configuration validation using `.env.example`-compatible placeholders; never commit a populated `.env` or any PHP/production credentials.
 - Compare legacy PHP and adapter results manually for status, `Content-Type`, error text, XML element names/order, JSON field casing, singleton/array behavior, date/number formatting, `clientid`, and `rescount`; test both the default route (XML) and the same route with `/format/json` (JSON).
-- Do not create local API-call audit or usage logs. Database access is read-only; ODG API logs are the audit source. Never log keys, secrets, bearer tokens, raw XML, or upstream payloads containing customer data.
+- Never log keys, secrets, bearer tokens, raw XML, or upstream payloads containing customer data. Set `ODG_DEBUG_PAYLOADS=N` in production.
 - Keep PHP live and authoritative during the parallel-hostname phase; do not cut traffic over without parity sign-off and a gateway route-back path.
+
+## Azure deployment
+
+The application is deployed to Azure App Service via Terraform. Key resources:
+
+| Terraform resource | Purpose |
+|---|---|
+| `azurerm_linux_web_app` | Node.js Express host — `app_command_line = "node dist/server.js"`, `health_check_path = "/health"` |
+| `azurerm_service_plan` | B1+ for always-on |
+| `azurerm_postgresql_flexible_server` | PostgreSQL 14+ — `PG_HOST = fqdn`, `PG_SSL = true` |
+| `azurerm_key_vault_secret` | Stores `PG_PASSWORD` and `ODG_API_CLIENT_SECRET` |
+| `azurerm_application_insights` | Telemetry and monitoring |
+| `azurerm_virtual_network` + private endpoints | Private App↔DB connectivity (recommended) |
+
+- All `.env` variables map to App Service Application Settings in Terraform (`app_settings { ... }`).
+- `PG_PASSWORD` and `ODG_API_CLIENT_SECRET` must be Key Vault references, never plaintext in app settings.
+- `LEGACY_PHP_REFERENCE_ROOT` and `MYSQL_*` variables must be **omitted** from Azure app settings entirely.
+- Run `node data/01-create-db.js` once post-deploy (via `null_resource/local-exec`) to create the tables.
 
 ## Test input file conventions
 
