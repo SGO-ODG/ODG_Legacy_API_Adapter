@@ -6,7 +6,7 @@ Build a Node.js/Express service on a parallel hostname that exposes the existing
 
 The Express project is maintained in a separate Git repository. Keep this PHP checkout at `C:\Saurabh\MyApps\Apache24\odgci_3.1.11` as a read-only development/reference checkout; configure it in the Express repository through `LEGACY_PHP_REFERENCE_ROOT`. Never require this path at runtime.
 
-First release covers: NDC Advisor, NDC Download, UR Advisor, Best Practice Guide, One Search, Comorbidity Calculator, and Reserve Calculator. Procedure Summary and Summary Guide are end-of-life and are excluded from the Express compatibility layer.
+Active routes: UR Advisor, Best Practice Guide, One Search, Comorbidity Calculator, and Reserve Calculator. NDC Advisor and NDC Download have been removed from scope. Procedure Summary and Summary Guide are end-of-life and are excluded from the Express compatibility layer.
 
 ## Implementation changes
 
@@ -17,7 +17,6 @@ First release covers: NDC Advisor, NDC Download, UR Advisor, Best Practice Guide
 - Connect to a PostgreSQL database using `PG_*` environment variables. Add a placeholder-only `.env.example` and ignore the populated `.env`; do not reuse or commit PHP database credentials. Run `data/01-create-db.js` once to create the three tables.
 - Add a shared OAuth client-credentials client configured through `OAUTH_TOKEN_URL`, audience, scopes, and upstream API version (`X-ApiVersion: 1.2`). After legacy validation, use the shared `ODG_API_CLIENT_ID` and `ODG_API_CLIENT_SECRET` from environment configuration — credentials are not stored per-company in the database. Cache one bearer token (keyed on token URL, client ID, audience, scopes) until shortly before the `expires_in` value (for example 3600 or 7200 seconds). Coalesce concurrent refreshes for the same cache key; invalidate and refresh once on an upstream 401, then retry once.
 - Implement declarative request/response transformers:
-  - `ndcadvisor` and `ndcdownload` -> `/formulary/ndc` or `/formulary/ndc/{ndcCode}`; use `/formulary/pbs` for the existing Australian/PBS behavior; page through NDC results for downloads.
   - `uradvisor` -> `/tao/icds` (ICD-driven), `/tao/procedures` (icd=9|10 reverse lookup with `resulttype=1`/`2`), or `/tao/fnol/{bp}/{noi}` (FNOL-only). FNOL response (`items[].taoDataItems[]`) is used directly without a secondary `/tao/icds` call. ICD requests with no results fall back to FNOL when `bp`/`noi` are also provided. AU uses `proc` key; subscription `outputMode=F` maps to `FullOutput=1`.
   - `bpguide` -> `/guidelines`, translating legacy ICD or FNOL-derived ICD input and transforming its guideline data into the legacy Best Practice Guide response shape.
   - `onesearch` -> `GET /search?query=<text>&type=<types>&facets=false&country=US`. Confirmed type values: `icd9search`, `icd10search`, `procedurescpt`, `formularyndc`, `treatment`. Response `resultSets[].section` maps back to legacy `type` values. CPT items use `procedureCode`; ICD items use `icdCode`; PROCT items use `primaryChapter`.

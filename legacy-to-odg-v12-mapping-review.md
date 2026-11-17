@@ -67,120 +67,7 @@ If those currently disabled `RestController` options are enabled later, preserve
 
 Endpoint-level validation errors remain endpoint-specific, such as 400 `Invalid web service request format.`, 400 `Invalid XML, unable to load...`, and the endpoint's existing 404 no-result description. Upstream OAuth, timeout, network, 4xx, and 5xx errors must be mapped to the approved legacy endpoint error—not exposed directly.
 
-## 1. NDC Advisor â€” `GET /restws/ndcadvisor`
-
-### Legacy request
-
-```http
-GET /restws/ndcadvisor?ndc=12345-6789~98765-4321&country=US&output=F&clientid=claim-123
-X-ODG-KEY: <key>
-```
-
-| Legacy parameter | Upstream candidate | Mapping status |
-|---|---|---|
-| `ndc`, numeric single code | `GET /formulary/ndc/{ndcCode}` | Confirmed endpoint; normalize legacy input to `NNNNN-NNNN`. |
-| `ndc`, numeric multiple codes | `GET /formulary/ndc?ndc=<repeated value>` | Endpoint confirmed; confirm the required OpenAPI array serialization. |
-| `ndc`, alphabetic keyword | `GET /formulary/ndc?keyword=<ndc>` | Confirmed parameter. |
-| `country=AU`, direct/keyword code | `/formulary/pbs/{pbsCode}` or `/formulary/pbs?pbs=...&keyword=...` | Confirmed endpoints/parameters. |
-| `clientid` | No upstream equivalent required | Echo after transformation. |
-| `output=F` | No confirmed direct equivalent | **TODO:** legacy US output adds `procsummary`; Procedure Summary is EOL, so approve whether to omit it, reject this combination, or source it elsewhere. |
-
-### New ODG response examples
-
-```json
-{
-  "page": 1,
-  "pageSize": 25,
-  "totalRecords": 1,
-  "ndcInformation": [
-    {
-      "productNdc": "12345-6789",
-      "odgNdcCode": "12345-6789",
-      "strength": "10 mg",
-      "tradeName": "Example trade name",
-      "effectiveDate": "2026-01-01T00:00:00Z",
-      "proprietaryName": "Example brand",
-      "nonProprietaryName": "Example generic",
-      "pharmClasses": "Example class",
-      "formularyInformation": []
-    }
-  ]
-}
-```
-
-```json
-{
-  "page": 1,
-  "pageSize": 25,
-  "totalRecords": 1,
-  "pbsInformation": [
-    {
-      "pbsCode": "1234A",
-      "brandName": "Example brand",
-      "atcCode": "A01",
-      "manufacCode": "MFG",
-      "drugMpName": "Example medicine",
-      "amtMppPreferredTerm": "Example term",
-      "formularyInformation": []
-    }
-  ]
-}
-```
-
-### Legacy response target
-
-```json
-{
-  "ndcCode": "12345-6789",
-  "brandName": "Example brand",
-  "genericName": "Example generic",
-  "tradeName": "Example trade name",
-  "drugClass": "Example class",
-  "GE": "...",
-  "status": "...",
-  "strength": "10 mg",
-  "effectiveDate": "01/01/2026",
-  "rescount": 1,
-  "clientid": "claim-123"
-}
-```
-
-| Legacy response field | New response candidate | Review state |
-|---|---|---|
-| `ndcCode` | `odgNdcCode` (fallback `productNdc`) | Confirm. |
-| `brandName` | `proprietaryName` | Confirm. |
-| `genericName` | `nonProprietaryName` | Confirm. |
-| `tradeName` | `tradeName` | Direct. |
-| `drugClass` | `pharmClasses` | Confirm formatting/multiplicity. |
-| `strength` | `strength` | Direct. |
-| `effectiveDate` | `effectiveDate`, formatted `MM/DD/YYYY` | Confirm timezone/date-only behavior. |
-| `GE`, `status` | likely `formularyInformation` | **TODO:** field-level mapping is not exposed by top-level Swagger schema. |
-| AU compact legacy fields | `PbsInfo` plus `formularyInformation` | **TODO:** `drugClass`, `odgGenericName`, `odgGenericEquiv`, `odgStatus` are not top-level `PbsInfo` fields. |
-
-## 2. NDC Download â€” `GET /restws/ndcdownload`
-
-### Legacy request
-
-```http
-GET /restws/ndcdownload?clientid=batch-1
-X-ODG-KEY: <key>
-```
-
-### New ODG request
-
-```http
-GET /formulary/ndc?page=1&pageSize=<upstream-maximum>
-Authorization: Bearer <token>
-X-ApiVersion: 1.2
-```
-
-Repeat pages until all `totalRecords` are collected. Current implementation uses `pageSize=100`. **TODO:** confirm upstream maximum `pageSize` and stable ordering guarantee.
-
-### Response transformation
-
-Transform each `NdcInfo` using the NDC field table above. The legacy response is an unpaginated array of records; return all collected records, and append legacy `rescount`/`clientid` behavior when supplied. CSV must serialize the transformed legacy fields, not upstream pagination properties.
-
-## 3. UR Advisor â€” `GET /restws/uradvisor`
+## 1. UR Advisor â€” `GET /restws/uradvisor`
 
 ### Legacy request
 
@@ -260,7 +147,7 @@ X-ODG-KEY: <key>
 
 **Resolved:** `/tao/icds` response `items[]` each contain `icd` (parent) and `procedures[]` (children). `/tao/procedures` response `items[]` each contain `procedure` (CPT/proc parent) and `icds[]` (ICD children). Legacy output key for AU is `proc`; for US is `cpt`. ICD child records use `icdfrequency` (not `cptfrequency`) in legacy output.
 
-## 4. Best Practice Guide â€” `GET /restws/bpguide`
+## 2. Best Practice Guide â€” `GET /restws/bpguide`
 
 ### Legacy request
 
@@ -329,7 +216,7 @@ FNOL resolution: calls `/tao/fnol/{bp}/{noi}` and extracts `data.icds[]` (string
 
 ICD family split for `/guidelines`: codes beginning with a letter → `icd10=<code>`; otherwise `icd9=<code>`.
 
-## 5. One Search â€” `POST /restws/onesearch`
+## 3. One Search â€” `POST /restws/onesearch`
 
 ### Legacy XML request
 
@@ -402,9 +289,9 @@ Sent as repeated `type` query params: `GET /search?query=...&type=icd9search&typ
 
 Unknown `section` values are silently skipped.
 
-## 6. Comorbidity Calculator â€” `POST /calculator/comorbidity`
+## 4. Comorbidity Calculator â€” `POST /calculator/comorbidity`
 
-## 7. Reserve Calculator â€” `POST /calculator/reserve`
+## 5. Reserve Calculator â€” `POST /calculator/reserve`
 
 ### Legacy XML request
 
