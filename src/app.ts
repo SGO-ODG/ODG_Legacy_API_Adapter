@@ -43,7 +43,9 @@ export function createApp(): express.Application {
 
   // Global error handler
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-    console.error('Unhandled error:', err.message);
+    // Log full stack in all environments so Application Insights captures actionable traces.
+    // The client only ever receives the sanitized 500 body below — the stack is never exposed.
+    console.error('Unhandled error:', err.stack ?? err.message);
     res.status(500).json({ error: 'Internal server error' });
   });
 

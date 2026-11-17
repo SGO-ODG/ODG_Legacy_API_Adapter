@@ -24,7 +24,11 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 const envSchema = z.object({
-  // Runtime environment — controls behaviour such as error detail and logging verbosity.
+  // Runtime environment — controls error detail and logging verbosity.
+  // Valid values:
+  //   development — verbose error responses, stack traces exposed, source maps active.
+  //   production  — sanitized error responses, no stack traces exposed to clients.
+  //   test        — used by Jest; suppresses console output during test runs.
   // Azure app_settings: NODE_ENV = "production"
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   // TCP port the Express server listens on.
@@ -69,12 +73,20 @@ const envSchema = z.object({
   OAUTH_TOKEN_URL: z.string().url(),
   // OAuth grant type — always client_credentials for machine-to-machine auth.
   OAUTH_GRANT_TYPE: z.string().default('client_credentials'),
-  // Optional OAuth audience claim sent in the token request body (omit if not required by the auth server).
+  // Optional OAuth audience claim sent in the token request body.
+  // Required by some authorization servers (e.g. Auth0, Azure AD) to scope the issued token to a
+  // specific API resource. When set and not a placeholder, the token request includes audience=<value>.
+  // Omit (or leave as placeholder) if the auth server does not require an audience claim.
   OAUTH_AUDIENCE: z.string().optional(),
-  // Optional space-delimited OAuth scopes sent in the token request body (omit if not required).
+  // Optional space-delimited OAuth scopes sent in the token request body.
+  // Restricts the permissions granted to the returned bearer token. When set and not a placeholder,
+  // the token request includes scope=<value>. Omit if the auth server grants all client permissions
+  // by default (the standard machine-to-machine client_credentials behavior).
   OAUTH_SCOPES: z.string().optional(),
   // Seconds before a cached token's actual expiry at which it is proactively refreshed,
   // preventing requests from using a token that expires mid-flight.
+  // Effective skew = min(this value, 10% of expires_in) — never burns more than 10% of lifetime.
+  // Default of 60 s is appropriate for tokens with a 1 h or longer lifetime.
   OAUTH_TOKEN_EXPIRY_SKEW_SECONDS: z.coerce.number().int().min(0).default(60),
 
   // Absolute path to the read-only PHP CodeIgniter reference checkout — development only.
