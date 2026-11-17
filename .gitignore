@@ -5,16 +5,12 @@ data/*.sqlite
 *.js.map
 *.xlsx
 
-# Customer data queries — dev only
-data/get-customer-sample-requestes.sql
-
 # Skip Folders
 tasks/
 coverage/
 node_modules/
 dist/
-api-tester/tests-scripts/output/
-api-tester/tests-scripts/input/TESTS/
+api-tester/tests-scripts/sgo-test/
 
 # Generated HTML reports — contain operational/customer data
 docs/
