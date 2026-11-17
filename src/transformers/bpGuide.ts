@@ -43,8 +43,10 @@ export function parseBpGuideParams(
   const noi      = p.noi !== undefined ? padFnol(p.noi) : undefined;
   const clientid = p.clientid;
   // Legacy clients may omit the decimal in ICD codes (e.g. "73556" → "735.56").
-  // Normalize each code before forwarding to the ODG API.
-  const icds     = tildeList(p.icd).map(normalizeIcdCode);
+  // Normalize each code before forwarding to the ODG API, then deduplicate while
+  // preserving order. Legacy PHP returned each unique code's guidelines only once
+  // even when a code appeared multiple times in the request (e.g. S43.402~S43.402).
+  const icds     = [...new Set(tildeList(p.icd).map(normalizeIcdCode))];
 
   if (icds.length === 0 && !(bp && noi)) {
     throw new LegacyError(ERRORS.INVALID_FORMAT());
@@ -91,6 +93,18 @@ async function fetchGuidelines(
 
 // ─── Response transformation ──────────────────────────────────────────────────
 
+/**
+ * Legacy PT/chiro visits and weeks are serialized as quoted strings (e.g. "1").
+ * ODG v1.2 may return range strings like "1-2"; take the first (lower) value
+ * and return it as a string to preserve legacy serialization behavior.
+ */
+function firstIntStr(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const first = String(value).split('-')[0].trim();
+  const n = parseInt(first, 10);
+  return isNaN(n) ? null : String(n);
+}
+
 function mapGuidelineRecord(rec: OdgGuidelineRecord): LegacyBpGuideRecord {
   const bp = (rec.bestPracticeGuidelines ?? []).map((g) => ({
     primaryRTWpath: g.pathway ?? null,
@@ -109,16 +123,16 @@ function mapGuidelineRecord(rec: OdgGuidelineRecord): LegacyBpGuideRecord {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pt = (rec.physicalTherapyVisits ?? []).map((v: any) => ({
     primarypath: v.pathway ?? null,
-    visits: v.visits ?? null,
-    weeks: v.weeks ?? null,
+    visits: firstIntStr(v.visits),
+    weeks: firstIntStr(v.weeks),
   }));
 
   // TODO/confirm: chiropractorVisits nested item schema not confirmed
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chiro = (rec.chiropractorVisits ?? []).map((v: any) => ({
     primarypath: v.pathway ?? null,
-    visits: v.visits ?? null,
-    weeks: v.weeks ?? null,
+    visits: firstIntStr(v.visits),
+    weeks: firstIntStr(v.weeks),
   }));
 
   return {
