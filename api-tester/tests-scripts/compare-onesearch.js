@@ -575,8 +575,9 @@ function detectFormat(body, contentType) {
 async function processRow(row) {
   const { test_name, url_path, xml_body } = row;
 
-  const legacyUrl  = LEGACY_BASE  + url_path;
-  const adapterUrl = ADAPTER_BASE + url_path;
+  const sep = (p) => p.startsWith("/") ? p : "/" + p;
+  const legacyUrl  = LEGACY_BASE  + sep(url_path);
+  const adapterUrl = ADAPTER_BASE + sep(url_path);
 
   // format is filled in after we know what each side actually returned
   const testMeta = {
