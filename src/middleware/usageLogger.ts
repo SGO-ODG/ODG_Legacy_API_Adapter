@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { insertUsageLog } from '../db/webserviceusage';
-import { isUsageLoggingEnabled } from '../config/env';
+import { isUsageLoggingEnabled, isDebugEnabled } from '../config/env';
 
 /**
  * Express middleware that writes one row to webserviceusage after each
@@ -67,11 +67,13 @@ export function usageLoggerMiddleware() {
         serverResponseTime,
       };
 
-      console.log(`[USAGE LOG] Inserting: company=${entry.companyCode} service=${entry.webserviceCode} status=${entry.resultCode}`);
+      if (isDebugEnabled()) {
+        console.log(`[USAGE LOG] Inserting: company=${entry.companyCode} service=${entry.webserviceCode} status=${entry.resultCode}`);
+      }
 
       insertUsageLog(entry)
         .then(() => {
-          console.log('[USAGE LOG] Insert OK');
+          if (isDebugEnabled()) console.log('[USAGE LOG] Insert OK');
         })
         .catch((err: Error) => {
           console.error('[USAGE LOG ERROR]', err.message);
