@@ -54,23 +54,52 @@ Build these aggregate structures:
 
 ---
 
-## Phase 2 — Categorize discrepancies
+## Phase 2 — Categorize discrepancies by action owner
 
-Group failing rows into **categories** based on `discrepancy_type` and `property_path`:
+The report is **not** a raw dump of CSV discrepancy types. It is a decision-support document
+for SEAD and Product teams. Group the failing tests into named items based on their
+**root cause and who must act**, not by `discrepancy_type`.
 
-| Category | Filter rule | Badge color |
-|----------|-------------|-------------|
-| HTTP Status Differences | `discrepancy_type === 'HTTP_STATUS_DIFF'` | red (`#dc3545`) |
-| Content Mismatches | `discrepancy_type === 'CONTENT_MISMATCH'` | orange (`#fd7e14`) |
-| Expected Differences | `discrepancy_type === 'EXPECTED_DIFF'` | blue (`#0d6efd`) |
+### Status buckets
 
-Within each category, sub-group by `property_path` to show patterns.
+Each item in the report belongs to exactly one of these statuses:
 
-For **priority actions**, classify as:
-- **High**: HTTP status mismatches (customer-visible failures) and CONTENT_MISMATCH on core
-  fields (status codes, numeric values)
-- **Medium**: CONTENT_MISMATCH on formatting or optional fields
-- **Low**: EXPECTED_DIFF (known acceptable divergences)
+| Status | Badge class | When to use |
+|--------|-------------|-------------|
+| `PRODUCT ACCEPTED` | `.badge-accepted` | Product confirmed adapter behavior is correct; adapter returns a different result than legacy but the difference is intentional or an improvement. Document for record only. |
+| `PENDING SEAD` | `.badge-pending` | Root cause is a content publishing gap or missing data in ODG v1.2 — SEAD team must verify or publish the content. |
+| `PENDING PRODUCT DECISION` | `.badge-pending` | The adapter could handle this multiple ways; product must choose. Present 2–3 concrete options. |
+| `PENDING PRODUCT CONFIRMATION` | `.badge-pending` | Adapter behavior diverges from legacy in a way that is likely acceptable, but product must explicitly confirm before cutover. |
+
+### What to include in the report
+
+**Always include:**
+- Any discrepancy where root cause requires SEAD team verification (content publishing gap,
+  ICD codes absent from the ODG v1.2 dataset, missing AU content)
+- Any discrepancy where root cause requires a Product decision on behavior options
+  (e.g. AU vs US country scope default, result count cap acceptability)
+- Product-confirmed decisions for record — even when the adapter is "correct" and no fix is
+  needed, stakeholders need to see that the difference was reviewed and accepted
+- Errors still pending resolution at report generation time (adapter bugs not yet fixed)
+
+**Always exclude:**
+- Adapter-code defects already fixed before the comparison run — these tests now pass and
+  there is nothing for SEAD or Product to decide
+- Internal QA actions (re-run tests, update test harness scripts)
+- References to adapter source files, TypeScript functions, or line numbers
+- Raw CSV discrepancy counts that are fully explained by a confirmed architectural difference
+  (e.g. Elasticsearch vs SQL search result count differences that product has already accepted)
+
+### Common root cause patterns to look for
+
+| Pattern | Likely status | Notes |
+|---------|---------------|-------|
+| Legacy 404/500 → Adapter 200 (Elasticsearch finds results SQL REGEXP missed) | PRODUCT ACCEPTED | Adapter improvement, not a regression |
+| Legacy 200 → Adapter 404 for AU-specific ICD codes | PENDING SEAD or PENDING PRODUCT DECISION | Check whether content gap or missing country scope parameter |
+| Legacy 200 → Adapter 404 for 5-digit ICD-9 procedure codes or malformed codes | PRODUCT ACCEPTED | Drop-digit fallback is confirmed not implemented in adapter |
+| ICD sub-code normalization (legacy resolves to parent, adapter returns sub-code) | PRODUCT ACCEPTED | Exact-match behavior confirmed correct |
+| ODG v1.2 returns more `activitymod` / content entries than legacy | PENDING SEAD | Could be publishing gap or draft content |
+| Result count capped at ~500 vs unbounded legacy result sets | PENDING PRODUCT CONFIRMATION | ODG API design limit |
 
 ---
 
@@ -136,10 +165,12 @@ Generate a self-contained HTML file. Use this exact structure and styling:
       font-weight: bold;
       white-space: nowrap;
     }
-    .badge-pass    { background: #E3FCEF; color: #006644; border: 1px solid #57D9A3; }
-    .badge-fail    { background: #FFEBE6; color: #BF2600; border: 1px solid #FF5630; }
-    .badge-warn    { background: #FFFAE6; color: #974F0C; border: 1px solid #FFE380; }
-    .badge-info    { background: #DEEBFF; color: #0747A6; border: 1px solid #4C9AFF; }
+    .badge-pass     { background: #E3FCEF; color: #006644; border: 1px solid #57D9A3; }
+    .badge-fail     { background: #FFEBE6; color: #BF2600; border: 1px solid #FF5630; }
+    .badge-warn     { background: #FFFAE6; color: #974F0C; border: 1px solid #FFE380; }
+    .badge-info     { background: #DEEBFF; color: #0747A6; border: 1px solid #4C9AFF; }
+    .badge-accepted { background: #FFFAE6; color: #974F0C; border: 1px solid #FFE380; }
+    .badge-pending  { background: #EAE6FF; color: #403294; border: 1px solid #998DD9; }
     .note {
       background: #DEEBFF;
       border-left: 4px solid #0052CC;
@@ -154,9 +185,9 @@ Generate a self-contained HTML file. Use this exact structure and styling:
       border-radius: 3px;
       margin: 12px 0;
     }
-    .error {
-      background: #FFEBE6;
-      border-left: 4px solid #FF5630;
+    .pending {
+      background: #EAE6FF;
+      border-left: 4px solid #6554C0;
       padding: 10px 14px;
       border-radius: 3px;
       margin: 12px 0;
@@ -181,6 +212,7 @@ Generate a self-contained HTML file. Use this exact structure and styling:
     .num-red    { color: #BF2600; }
     .num-orange { color: #974F0C; }
     .num-blue   { color: #0052CC; }
+    .num-purple { color: #403294; }
     hr { border: none; border-top: 1px solid #DFE1E6; margin: 32px 0; }
   </style>
 </head>
@@ -192,14 +224,50 @@ Generate a self-contained HTML file. Use this exact structure and styling:
 
 ### Section order
 
-1. **Page title + meta line** — `<h1>` with endpoint name, then `<p>` showing API path, report date, source CSV
+1. **Page title + meta line** — `<h1>` with endpoint name, then `<p>` showing API path,
+   report date, source CSV. Add a brief sentence: "This report covers only open items
+   requiring clarification or a decision from the SEAD team or Product. It includes
+   product-confirmed behaviors for record."
+
 2. `<hr />`
-3. **Executive Summary** — `<h2>`, then `.summary-grid` stat cards (Total Test Rows, PASS, HTTP Status Mismatch, Content Mismatch, Expected Diffs), followed by per-customer summary table (Customer | Tests Run | PASS | HTTP Status Mismatch | Content Mismatch | Expected Diffs)
+
+3. **Executive Summary** `<h2>`
+   - `.summary-grid` stat cards:
+     - Total Tests (`.num-blue`)
+     - PASS with % (`.num-green`)
+     - Product Accepted count (`.num-orange`)
+     - Pending SEAD count (`.num-purple`)
+     - Pending Product Decision/Confirmation count (`.num-purple`, if any)
+   - One-paragraph plain-English summary
+   - Per-customer summary table: **Customer | Tests Run | PASS | Product Accepted | Pending SEAD | Pending Product**
+     (omit Pending Product column if zero for all customers)
+
 4. `<hr />`
-5. **Discrepancy Categories** — `<h2>`, then one `<h3>` per category with badge count, description paragraph, `.error`/`.warn` callout, detailed table, `.note` recommendation
-6. `<hr />`
-7. **Summary of Recommended Actions** — `<h2>`, table (Priority | Category | Action | Owner) using `.badge-fail`/`.badge-warn`/`.badge-info` for priority
-8. Footer `<section>` with Additional Notes `<ul>`
+
+5. **Open Items** `<h2>`
+   - One `<h3>` per item, numbered, with status badge inline:
+     ```html
+     <h3>Item N — Short title (K tests) &nbsp;<span class="badge badge-accepted">PRODUCT ACCEPTED</span></h3>
+     ```
+     or:
+     ```html
+     <h3>Item N — Short title &nbsp;<span class="badge badge-pending">PENDING SEAD</span></h3>
+     ```
+   - Description paragraph explaining root cause in plain English
+   - Callout block:
+     - `.warn` for PRODUCT ACCEPTED items (yellow callout stating the product decision)
+     - `.pending` for PENDING items (purple callout stating the open question and action required)
+     - `.note` for additional informational notes
+   - Detail table — columns depend on item type:
+     - For HTTP status items: Test | Customer | Legacy Status | Adapter Status | Reason
+     - For content items: Test | Customer | ICD Code | Property | Legacy Value | Adapter Value
+     - For count/structural items: Direction | Cause | Example
+   - `<hr />` between items
+
+6. **Summary** `<h2>`
+   - Table: **Item | Affected Tests | Affected Customer(s) | Action Required | Owner | Status**
+   - Owner is one of: **Product**, **SEAD team**, **Customer communication**, **ODG API Team**
+   - Status uses `.badge-accepted` or `.badge-pending` badge
 
 ### Value display rules
 - Truncate `legacy_value` / `adapter_value` to 120 chars in table cells; show full value on hover via `title` attribute
@@ -228,3 +296,17 @@ Generate a self-contained HTML file. Use this exact structure and styling:
 | `legacy-customer-onesearch-results.csv` | `onesearch` | `onesearch-discrepancy-report.html` |
 | `legacy-customer-calculator-results.csv` | `calculator` | `calculator-discrepancy-report.html` |
 | `legacy-customer-ndcadvisor-results.csv` | `ndcadvisor` | `ndcadvisor-discrepancy-report.html` |
+
+---
+
+## Reference reports
+
+The following completed reports in `docs/` are examples of the correct format and content
+philosophy. Read them before generating a new report to ensure consistency in tone,
+structure, callout content, and CSS class usage:
+
+| Report | Items | Open issues still pending |
+|--------|-------|--------------------------|
+| `docs/uradvisor-discrepancy-report.html` | 1 PRODUCT ACCEPTED, 1 PENDING SEAD | C49.21/C49.22 AU content gap (SEAD team) |
+| `docs/bpguide-discrepancy-report.html` | 2 PRODUCT ACCEPTED, 1 PENDING SEAD | Activity modifiers G90.5/M79.629/M79.64 (SEAD team) |
+| `docs/onesearch-discrepancy-report.html` | 1 PRODUCT ACCEPTED, 1 PENDING PRODUCT DECISION, 1 PENDING PRODUCT CONFIRMATION | MLC-TEST-33 AU country scope (Product); result count cap (Product) |

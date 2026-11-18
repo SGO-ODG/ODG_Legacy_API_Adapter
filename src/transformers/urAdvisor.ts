@@ -371,7 +371,7 @@ export function buildUraModel(result: UraResult): Record<string, unknown> {
   });
 
   const base: Record<string, unknown> = {
-    item: items.length === 1 ? items[0] : items,
+    item: items,
   };
 
   if (clientid) {

@@ -15,15 +15,22 @@
  *  - Length ≤ 3 characters       → returned unchanged (root code, no subtype)
  *  - Otherwise                   → decimal inserted after position 3
  *
+ * Step 3 — Strip trailing dot: codes like "F32." or "847." have a dangling
+ * decimal with no subtype. These are stripped to their root form before
+ * the decimal-insertion check so that "F32." becomes "F32" (unchanged,
+ * length ≤ 3 rule) and "847." becomes "847" (unchanged).
+ *
  * @example normalizeIcdCode('73556')    → '735.56'
  * @example normalizeIcdCode('A4545')    → 'A45.45'
  * @example normalizeIcdCode('735.56')   → '735.56'  (unchanged)
  * @example normalizeIcdCode('M54')      → 'M54'      (unchanged)
  * @example normalizeIcdCode('M54.5 ')   → 'M54.5'   (trailing space stripped)
  * @example normalizeIcdCode('724.2\n')  → '724.2'   (control char stripped)
+ * @example normalizeIcdCode('F32.')     → 'F32'      (trailing dot stripped)
+ * @example normalizeIcdCode('847.')     → '847'      (trailing dot stripped)
  */
 export function normalizeIcdCode(code: string): string {
-  const sanitized = code.replace(/[^A-Za-z0-9.]/g, '');
+  const sanitized = code.replace(/[^A-Za-z0-9.]/g, '').replace(/\.$/, '');
   if (sanitized.includes('.') || sanitized.length <= 3) return sanitized;
   return `${sanitized.slice(0, 3)}.${sanitized.slice(3)}`;
 }
