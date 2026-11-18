@@ -288,14 +288,36 @@ export function mapCalcResponse(
       ? formatFixedFields(omitKeys(data.riskAssessment, ['ssdiFlag']), ['magnitude', 'volatility'], 2)
       : undefined,
     // TODO/confirm: adjustedduration BP/CP95/CP100 vs v1.2 percentiles
-    adjustedduration: (service === 'comorbidity' && (input.medicalonly === '1' || input.medicalonly?.toUpperCase() === 'M')) || (service === 'reserve' && !input.fulloutput) || !data.adjustedDuration
-      ? undefined
-      : renameKeys(omitKeys(data.adjustedDuration, ['clinicalMin']), {
-          bestPractice: 'bp',
-          claimAverage: 'cp95',
-          claimMax: 'cp100',
-        }),
-    projectedcosts: data.projectedCosts
+    adjustedduration: (() => {
+      if (
+        (service === 'comorbidity' && (input.medicalonly === '1' || input.medicalonly?.toUpperCase() === 'M')) ||
+        (service === 'reserve' && !input.fulloutput) ||
+        !data.adjustedDuration
+      ) return undefined;
+
+      const renamed = renameKeys(omitKeys(data.adjustedDuration, ['clinicalMin']), {
+        bestPractice: 'bp',
+        claimAverage: 'cp95',
+        claimMax:     'cp100',
+      }) as Record<string, unknown>;
+
+      // ODG places alert colors in notes.medical.* rather than inside adjustedDuration.*
+      // Extract them and inject into the per-percentile duration objects.
+      const med = (data.notes as Record<string, unknown> | undefined) as
+        { medical?: { bestPractice?: { alert?: string }; claimAverage?: { alert?: string }; claimMax?: { alert?: string } } } | undefined;
+      const alertMap: Record<string, string | undefined> = {
+        bp:    med?.medical?.bestPractice?.alert,
+        cp95:  med?.medical?.claimAverage?.alert,
+        cp100: med?.medical?.claimMax?.alert,
+      };
+      for (const [key, alertVal] of Object.entries(alertMap)) {
+        if (alertVal && renamed[key] && typeof renamed[key] === 'object') {
+          (renamed[key] as Record<string, unknown>).alert = alertVal;
+        }
+      }
+      return renamed;
+    })(),
+    projectedcosts: service === 'reserve' && data.projectedCosts
       ? formatCurrencyValues(renameKeys(data.projectedCosts, {
           bestPractice: 'bp',
           claimAverage: 'cp95',
@@ -421,7 +443,7 @@ export function mapCalcResponse(
       return Object.keys(mapped).length > 0 ? mapped : undefined;
     })(),
     alertdesc: data.alertdesc ?? undefined,
-    notes: data.notes
+    notes: service === 'reserve' && data.notes
       ? (() => {
           let n = deepRenameKey(data.notes as Record<string, unknown>, 'bestPractice', 'bp');
           n = deepRenameKey(n as Record<string, unknown>, 'claimAverage', 'cp95');
@@ -441,8 +463,9 @@ export async function handleComorbidity(
   format: LegacyFormat = 'xml',
 ): Promise<LegacyCalculatorResponse> {
   const input = parseCalcXml(raw);
-  // TODO/confirm: requestedoutput enum value for comorbidity
-  const body = buildCalcRequest(input, 'RasAndRtw');
+  // Use RasRtwCosts (same as reserve) so ODG returns notes/alertdesc alongside adjustedDuration.
+  // projectedcosts is excluded from the comorbidity response in mapCalcResponse.
+  const body = buildCalcRequest(input, 'RasRtwCosts');
   try {
     const data = await odgPost<OdgCalculatorResponse>('/calculator', body);
     return mapCalcResponse(data, input, format, 'comorbidity');

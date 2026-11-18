@@ -262,9 +262,6 @@ const EXPECTED_DIFF_PATTERNS = [
   // stcode anywhere in the response: adapter does not have this property and
   // always returns it empty; legacy may return a value.
   /\.stcode$/,
-  // alertdesc and any sub-fields: legacy may surface alertdesc fields that the
-  // adapter does not yet return. Matches root.alertdesc.* (XML) and alertdesc.* (JSON).
-  /^(root\.)?alertdesc(\..+)?$/,
 ];
 
 // Regex patterns for paths where the adapter returns data but legacy does not.
@@ -652,9 +649,6 @@ async function processRow(row) {
     const procSummaryDetail = !fnolDetail && discrepancy_type === 'EXPECTED_DIFF' && ADAPTER_EXTRA_PATTERNS.some(re => re.test(diff.path))
       ? `Expected diff (adapter procsummary): adapter returns procsummary for CPT code that legacy omits — legacy="${truncate(diff.legacyValue, 80)}" adapter="${truncate(diff.adapterValue, 80)}"`
       : null;
-    const alertdescDetail = !fnolDetail && !procSummaryDetail && discrepancy_type === 'EXPECTED_DIFF' && /^(root\.)?alertdesc(\..+)?$/.test(diff.path)
-      ? `Expected diff (alertdesc): legacy returns alertdesc field that adapter does not yet surface — legacy="${truncate(diff.legacyValue, 80)}" adapter omits`
-      : null;
     const thresholdDetail = discrepancy_type === 'WITHIN_THRESHOLD'
       ? `Within threshold (diff=${Math.abs(parseFloat(diff.legacyValue) - parseFloat(diff.adapterValue)).toFixed(4)}, threshold=±${VARIANCE_THRESHOLD}): legacy="${diff.legacyValue}" adapter="${diff.adapterValue}"`
       : null;
@@ -664,8 +658,6 @@ async function processRow(row) {
       ? fnolDetail
       : procSummaryDetail
       ? procSummaryDetail
-      : alertdescDetail
-      ? alertdescDetail
       : thresholdDetail
       ? thresholdDetail
       : discrepancy_type === 'EXPECTED_DIFF'

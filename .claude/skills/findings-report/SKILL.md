@@ -25,7 +25,7 @@ All compare-*.js scripts write a CSV with these columns:
 | `format` | `xml` or `json` |
 | `http_status_legacy` | HTTP status returned by legacy PHP API |
 | `http_status_adapter` | HTTP status returned by adapter |
-| `discrepancy_type` | `PASS`, `HTTP_STATUS_DIFF`, `CONTENT_MISMATCH`, or `EXPECTED_DIFF` |
+| `discrepancy_type` | Type tag written by the compare script. The full set varies by endpoint — see Phase 3 step 3 for per-script attribution. Universal types (all scripts): `PASS`, `HTTP_STATUS_DIFF`, `CONTENT_MISMATCH`, `FORMAT_MISMATCH`, `PARSE_ERROR`, `NETWORK_ERROR`. Additional types: `EXPECTED_DIFF` (bpguide, comorbidity, reserve), `EMPTY_VS_RESULTS` (uradvisor, comorbidity, reserve), `WITHIN_THRESHOLD` (comorbidity, reserve), `COUNT_INFO` (onesearch), `RESULT_PRESENCE_DIFF` / `MISSING_IN_ADAPTER` / `EXTRA_IN_ADAPTER` / `TYPE_MISMATCH` / `TYPE_MISSING_IN_ADAPTER` / `VALUE_MISMATCH` (onesearch only). |
 | `property_path` | JSON path of the differing field (empty for PASS / HTTP_STATUS_DIFF) |
 | `legacy_value` | Value from legacy API |
 | `adapter_value` | Value from adapter |
@@ -231,7 +231,48 @@ Generate a self-contained HTML file. Use this exact structure and styling:
 
 2. `<hr />`
 
-3. **Executive Summary** `<h2>`
+3. **Discrepancy Type Reference** `<h2>`
+   - Opening paragraph: one sentence explaining that each test fires both the legacy PHP API
+     and the adapter in parallel and tags output rows with one of the types listed below.
+     Also note which types are excluded from the failure count for this endpoint
+     (e.g. `EXPECTED_DIFF`, `WITHIN_THRESHOLD`, `COUNT_INFO`).
+   - **Reference table** — one row per type **that applies to this endpoint**, with columns:
+     **Type | Counts as Failure? | What It Means | Detection Logic**.
+     Include only the rows applicable to this endpoint; omit rows for types that are never
+     emitted for it. All 16 known types and their attributes are (for skill-internal use —
+     do NOT include the "applies to" grouping headings or script names in the HTML output):
+
+     **Universal — all endpoints:**
+     - `PASS` — No — status + full body identical — no diffs produced
+     - `HTTP_STATUS_DIFF` — Yes — different HTTP status codes; body comparison skipped — `legacyResult.status !== adapterResult.status`
+     - `CONTENT_MISMATCH` — Yes — field value differs or adapter missing a record legacy returned (for onesearch: applies to non-200 error responses only; 200 responses use schema-only structural comparison) — recursive comparator; any leaf diff not overridden to a non-failure type
+     - `FORMAT_MISMATCH` — Yes — legacy returns XML, adapter returns JSON (or vice versa) — `detectFormat(legacy) !== detectFormat(adapter)` after both calls succeed
+     - `PARSE_ERROR` — Yes — response body cannot be parsed as XML or JSON — `JSON.parse()` or `XMLParser.parse()` throws
+     - `NETWORK_ERROR` — Yes — HTTP request failed at network level (timeout, connection refused) — `axios.get()` itself throws
+
+     **bpguide, comorbidity, reserve endpoints only:**
+     - `EXPECTED_DIFF` — No (accepted) — known intentional adapter-vs-legacy difference: adapter returns more content, an exact sub-code where legacy returned the parent code, alert/stcode fields added by ODG v1.2, adapter-side procsummary extras, or FNOL-triggered score/duration/cost diffs — set by explicit path/pattern allow-lists
+
+     **uradvisor, comorbidity, reserve endpoints only:**
+     - `EMPTY_VS_RESULTS` — Yes — one side's array has records and the other has none — triggered when `legacy.length > 0 && adapter.length === 0` or vice versa for a matched section
+
+     **comorbidity, reserve endpoints only:**
+     - `WITHIN_THRESHOLD` — No (accepted) — numeric value differs but the absolute difference is within the configured variance threshold — applied to `riskassessment.score`, `adjustedduration.*.days`, `adjustedsummaryguidelines.*` paths
+
+     **onesearch endpoint only** (200-response schema comparison — onesearch compares result structure, not field values, for successful responses):
+     - `COUNT_INFO` — No (informational) — result count differs but both sides returned results — recorded for transparency; does not count as a failure because Elasticsearch vs SQL result sets differ by design
+     - `RESULT_PRESENCE_DIFF` — Yes — one side returned results for a search type/section, the other returned empty — legacy has results but adapter has none, or vice versa, for a given section
+     - `MISSING_IN_ADAPTER` — Yes — a record (by code/id key) present in legacy results is absent from adapter results — key-join match attempted; record not found in adapter side
+     - `EXTRA_IN_ADAPTER` — Yes — a record present in adapter results has no corresponding legacy record — key-join match attempted; record not found in legacy side
+     - `TYPE_MISMATCH` — Yes — both sides returned the section/type but its structural shape (required properties) differs — schema property check on matched section
+     - `TYPE_MISSING_IN_ADAPTER` — Yes — a search result type/section is present in legacy response but absent from adapter response entirely — section key present in legacy but missing from adapter top-level result
+     - `VALUE_MISMATCH` — Yes — a key-matched record was found on both sides but a field value differs — only checked for fields in the structural key-join comparison (not full content diff)
+
+   - **This Run summary table** — compact table with columns: **Discrepancy Type | Unique Test Cases | Counts as Failure? | Notes**. Count unique test names per type (not rows). Include a row for each type that this script can produce; show 0 for types with no occurrences. End with a Total row. Do NOT include individual test names or ICD codes — this section must stay small.
+
+4. `<hr />`
+
+5. **Executive Summary** `<h2>`
    - `.summary-grid` stat cards:
      - Total Tests (`.num-blue`)
      - PASS with % (`.num-green`)

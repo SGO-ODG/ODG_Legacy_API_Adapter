@@ -365,7 +365,7 @@ Unknown `section` values are silently skipped.
 
 | Legacy endpoint | Upstream `requestedoutput` | Notes |
 |---|---|---|
-| `/calculator/comorbidity` | `RasAndRtw` | Returns risk assessment + RTW/duration data. |
+| `/calculator/comorbidity` | `RasRtwCosts` | Same value as reserve. ODG only returns `notes.medical.*.alert` and `alertdesc` for `RasRtwCosts`. `projectedcosts` is excluded from the comorbidity response in the transformer. |
 | `/calculator/reserve` | `RasRtwCosts` | Returns risk assessment + RTW/duration + projected costs. |
 
 ### New ODG response example
