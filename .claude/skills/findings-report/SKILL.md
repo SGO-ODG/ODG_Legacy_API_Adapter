@@ -10,7 +10,10 @@ or comparison analysis from a CSV output file in api-tester/tests-scripts/output
 
 Reads a comparison results CSV from `api-tester/tests-scripts/output/` and produces a
 self-contained HTML report saved to `docs/<endpoint>-discrepancy-report.html`.
-The report is styled for Confluence (open in browser → select all → copy → paste).
+
+**The HTML must be Confluence-paste-ready.** When the user opens it in a browser,
+selects all (Ctrl+A), and pastes into a Confluence page, the tables, headings,
+callout boxes, badges, and stat cards must all transfer correctly with their formatting intact.
 
 ---
 
@@ -34,6 +37,23 @@ All compare-*.js scripts write a CSV with these columns:
 **Note**: One test case produces multiple CSV rows when there are multiple differing fields.
 Count unique `test_name` values (not rows) for the total test count. A test is PASS only if
 **all** its rows have `discrepancy_type = PASS`.
+
+---
+
+## Phase 0 — Check for an existing report
+
+Before reading the CSV, check whether a previous report already exists for this endpoint:
+
+1. Look in `docs/` for `<endpoint>-discrepancy-report.html` (e.g. `docs/comorbidity-discrepancy-report.html`).
+2. If the file exists, **read it in full** before proceeding. Extract:
+   - Every open item (numbered items under "Open Items") — note its title, status badge, and which test cases / ICD codes it covers.
+   - Any items marked `PRODUCT ACCEPTED` — these are confirmed decisions that should be carried forward **only if the underlying discrepancy still appears in the new CSV run**.
+   - Any items marked `PENDING *` — these are unresolved questions; carry them forward only if the failing tests still appear in the new CSV run.
+3. The purpose of reading the previous report is to avoid re-reporting issues that have already been fixed:
+   - If a previously reported item's tests now all pass in the new CSV, **do not include that item** in the new report. The fix has been verified.
+   - If a previously reported item's tests still fail, carry the item forward with any updated test counts and preserve the existing product decision / open question text.
+   - If a previously reported `PENDING` item is now fully resolved (tests pass), note it only in the **Summary** section as `RESOLVED` rather than omitting it silently — this gives stakeholders a clear audit trail.
+4. If no existing report is found, skip this step and proceed directly to Phase 1.
 
 ---
 
@@ -107,6 +127,22 @@ Each item in the report belongs to exactly one of these statuses:
 
 Generate a self-contained HTML file. Use this exact structure and styling:
 
+### Confluence compatibility rules
+
+The HTML **must** be pasteable into Confluence (Ctrl+A → Ctrl+C → paste). Confluence strips external
+CSS, JavaScript, and many layout properties. Follow these rules without exception:
+
+- **No flexbox or CSS grid** — Confluence discards `display:flex`, `display:grid`, `flex:`, `gap:`,
+  and `flex-wrap`. Use `<table>` for any multi-column layout (stat cards, side-by-side blocks).
+- **No external resources** — no `<link>` stylesheets, no CDN fonts, no `<script src="...">`.
+  All CSS goes in the `<style>` block; all fonts must be system fonts (Arial, etc.).
+- **Light table headers** — `th { background: #F4F5F7; color: #5E6C84 }`. Confluence strips dark
+  backgrounds from `<th>` elements, making white-on-dark text invisible after paste.
+- **Stat cards as a `<table>`** — render the `.summary-grid` section as
+  `<table class="summary-table"><tr>` with one `<td>` per card. Do not use a `<div>` with flex.
+- **Callout boxes with `border-left`** — the `.note`, `.warn`, `.pending` divs use `border-left`
+  which Confluence preserves well. Keep these as-is.
+
 ### Document shell
 
 ```html
@@ -146,10 +182,12 @@ Generate a self-contained HTML file. Use this exact structure and styling:
       font-size: 13px;
     }
     th {
-      background: #0052CC;
-      color: #fff;
+      background: #F4F5F7;
+      color: #5E6C84;
       text-align: left;
       padding: 8px 10px;
+      border: 1px solid #DFE1E6;
+      font-weight: bold;
     }
     td {
       border: 1px solid #DFE1E6;
@@ -192,20 +230,8 @@ Generate a self-contained HTML file. Use this exact structure and styling:
       border-radius: 3px;
       margin: 12px 0;
     }
-    .summary-grid {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-      margin: 16px 0;
-    }
-    .summary-card {
-      flex: 1;
-      min-width: 140px;
-      border: 1px solid #DFE1E6;
-      border-radius: 4px;
-      padding: 14px 16px;
-      text-align: center;
-    }
+    .summary-table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+    .summary-table td { border: 1px solid #DFE1E6; padding: 14px 16px; text-align: center; width: 20%; vertical-align: middle; }
     .summary-card .number { font-size: 32px; font-weight: bold; }
     .summary-card .label  { font-size: 12px; color: #5E6C84; margin-top: 4px; }
     .num-green  { color: #006644; }
@@ -273,7 +299,8 @@ Generate a self-contained HTML file. Use this exact structure and styling:
 4. `<hr />`
 
 5. **Executive Summary** `<h2>`
-   - `.summary-grid` stat cards:
+   - Stat cards rendered as `<table class="summary-table"><tr>` — one `<td class="summary-card">` per
+     metric (Confluence-safe; no flex/grid divs):
      - Total Tests (`.num-blue`)
      - PASS with % (`.num-green`)
      - Product Accepted count (`.num-orange`)
@@ -309,6 +336,9 @@ Generate a self-contained HTML file. Use this exact structure and styling:
    - Table: **Item | Affected Tests | Affected Customer(s) | Action Required | Owner | Status**
    - Owner is one of: **Product**, **SEAD team**, **Customer communication**, **ODG API Team**
    - Status uses `.badge-accepted` or `.badge-pending` badge
+   - If a previously reported item was resolved (tests now pass), add a row for it with
+     status badge `.badge-pass` labeled `RESOLVED` and "Action Required" = "None — fixed and verified".
+     This provides an audit trail without cluttering the Open Items section.
 
 ### Value display rules
 - Truncate `legacy_value` / `adapter_value` to 120 chars in table cells; show full value on hover via `title` attribute

@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Best Practice Guide — Adapter Comparison Discrepancy Report</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #172B4D;
+      max-width: 1100px;
+      margin: 40px auto;
+      padding: 0 24px;
+      line-height: 1.6;
+    }
+    h1 { font-size: 26px; border-bottom: 2px solid #DFE1E6; padding-bottom: 8px; margin-top: 32px; }
+    h2 { font-size: 20px; border-bottom: 1px solid #DFE1E6; padding-bottom: 6px; margin-top: 36px; color: #0052CC; }
+    h3 { font-size: 16px; margin-top: 24px; color: #253858; }
+    p  { margin: 10px 0; }
+    ul, ol { margin: 10px 0 10px 24px; }
+    li { margin: 4px 0; }
+    code {
+      background: #F4F5F7;
+      border: 1px solid #DFE1E6;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 14px 0;
+      font-size: 13px;
+    }
+    th {
+      background: #0052CC;
+      color: #fff;
+      text-align: left;
+      padding: 8px 10px;
+    }
+    td {
+      border: 1px solid #DFE1E6;
+      padding: 6px 10px;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #F4F5F7; }
+    .badge {
+      display: inline-block;
+      border-radius: 3px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+    .badge-pass     { background: #E3FCEF; color: #006644; border: 1px solid #57D9A3; }
+    .badge-fail     { background: #FFEBE6; color: #BF2600; border: 1px solid #FF5630; }
+    .badge-warn     { background: #FFFAE6; color: #974F0C; border: 1px solid #FFE380; }
+    .badge-info     { background: #DEEBFF; color: #0747A6; border: 1px solid #4C9AFF; }
+    .badge-accepted { background: #FFFAE6; color: #974F0C; border: 1px solid #FFE380; }
+    .badge-pending  { background: #EAE6FF; color: #403294; border: 1px solid #998DD9; }
+    .note {
+      background: #DEEBFF;
+      border-left: 4px solid #0052CC;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .warn {
+      background: #FFFAE6;
+      border-left: 4px solid #FF8B00;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .pending {
+      background: #EAE6FF;
+      border-left: 4px solid #6554C0;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .summary-grid {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+    }
+    .summary-card {
+      flex: 1;
+      min-width: 140px;
+      border: 1px solid #DFE1E6;
+      border-radius: 4px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .summary-card .number { font-size: 32px; font-weight: bold; }
+    .summary-card .label  { font-size: 12px; color: #5E6C84; margin-top: 4px; }
+    .num-green  { color: #006644; }
+    .num-red    { color: #BF2600; }
+    .num-orange { color: #974F0C; }
+    .num-blue   { color: #0052CC; }
+    .num-purple { color: #403294; }
+    hr { border: none; border-top: 1px solid #DFE1E6; margin: 32px 0; }
+    .sub-h3 { font-size: 14px; font-weight: bold; margin-top: 18px; color: #344563; }
+  </style>
+</head>
+<body>
+
+<h1>Best Practice Guide — Adapter Comparison Discrepancy Report</h1>
+<p>
+  <strong>API path:</strong> <code>GET /restws/bpguide</code> &nbsp;|&nbsp;
+  <strong>Report date:</strong> 2026-11-17 &nbsp;|&nbsp;
+  <strong>Source CSV:</strong> <code>api-tester/tests-scripts/output/legacy-customer-bpguide-results.csv</code>
+</p>
+<p>
+  This report covers only open items requiring clarification or a decision from the SEAD team or Product. Adapter-code defects identified during this comparison run have been resolved separately and are not included here.
+</p>
+
+<hr />
+
+<h2>Discrepancy Type Reference</h2>
+<p>
+  Each test case fires both the legacy PHP API and the adapter API in parallel, then compares HTTP status codes and the full parsed response body. Each output row is tagged with one of the following discrepancy types. Types marked <strong>Yes</strong> under <em>Counts as failure?</em> cause the test to be reported as FAIL; <code>EXPECTED_DIFF</code> rows are excluded from the failure count and treated as accepted/informational differences.
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Counts as Failure?</th>
+      <th>What It Means</th>
+      <th>Detection Logic</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>PASS</code></td>
+      <td><span class="badge badge-pass">No</span></td>
+      <td>HTTP status codes and full response bodies are identical on both sides. No differences found.</td>
+      <td>Emitted when zero diff rows are produced for a test after all comparison checks complete.</td>
+    </tr>
+    <tr>
+      <td><code>HTTP_STATUS_DIFF</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>Legacy and adapter returned different HTTP status codes (e.g., legacy 200 vs. adapter 404). Body comparison is skipped — the status difference is the entire result for that test.</td>
+      <td>Triggered before body parsing when <code>legacyResult.status !== adapterResult.status</code>.</td>
+    </tr>
+    <tr>
+      <td><code>CONTENT_MISMATCH</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>A specific field value differs between legacy and adapter, or the adapter is missing a record that legacy returned. Both sides returned the same HTTP status code but their parsed bodies disagree.</td>
+      <td>ICD-aware recursive comparator (<code>compareItemsList</code>) walks both parsed objects. Any leaf-value difference or unmatched legacy item that is not overridden to <code>EXPECTED_DIFF</code> is reported as this type.</td>
+    </tr>
+    <tr>
+      <td><code>EXPECTED_DIFF</code></td>
+      <td><span class="badge badge-warn">No (accepted)</span></td>
+      <td>The adapter returns <em>more</em> content than legacy, or returns a more precise ICD sub-code / updated name from ODG v1.2. These are intentional differences between the legacy content database and ODG v1.2 — not bugs.</td>
+      <td>Set in three situations: (1) adapter returns a property/element that legacy omits; (2) adapter returns extra array items (e.g., more <code>activitymod</code> entries) not present in legacy; (3) the adapter ICD code is a sub-code variant of the legacy root code (prefix-matched but full code differs).</td>
+    </tr>
+    <tr>
+      <td><code>FORMAT_MISMATCH</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>Legacy responded with one format (XML or JSON) but the adapter responded with the other. Detected via <code>Content-Type</code> header inspection and body sniffing (<code>{</code> or <code>[</code> prefix → JSON, otherwise XML).</td>
+      <td>Triggered when <code>detectFormat(legacy) !== detectFormat(adapter)</code> after both HTTP calls succeed with the same status code.</td>
+    </tr>
+    <tr>
+      <td><code>PARSE_ERROR</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>One or both responses could not be parsed as valid XML or JSON. Body comparison is skipped and the parse exception message is recorded in the <code>detail</code> column.</td>
+      <td>Triggered when <code>JSON.parse()</code> or <code>XMLParser.parse()</code> throws an exception for either side's response body.</td>
+    </tr>
+    <tr>
+      <td><code>NETWORK_ERROR</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>The HTTP request to the legacy or adapter host failed at the network level (connection refused, DNS failure, 30-second timeout, etc.). No HTTP status code or response body is available.</td>
+      <td>Triggered when <code>axios.get()</code> itself throws (a thrown exception indicates a network-level failure, distinct from an HTTP error response which always yields a status code).</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Discrepancy Type Summary — This Run</h3>
+<p>
+  Counts below are unique test cases (not output rows). A single test can produce multiple <code>EXPECTED_DIFF</code> rows (one per differing field) but is counted once.
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Discrepancy Type</th>
+      <th>Unique Test Cases</th>
+      <th>Counts as Failure?</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>PASS</code></td>
+      <td>402</td>
+      <td><span class="badge badge-pass">No</span></td>
+      <td>HTTP status and full body matched exactly on both sides.</td>
+    </tr>
+    <tr>
+      <td><code>HTTP_STATUS_DIFF</code></td>
+      <td>9</td>
+      <td><span class="badge badge-fail">Yes — Product Accepted</span></td>
+      <td>All in Symetra-ODGDEMO. Legacy returns 200 via drop-digit fallback for 5-digit ICD-9 procedure codes; adapter correctly returns 404. See Item 1.</td>
+    </tr>
+    <tr>
+      <td><code>EXPECTED_DIFF</code> — ICD code / name normalization</td>
+      <td>3</td>
+      <td><span class="badge badge-warn">No (accepted)</span></td>
+      <td>All in MLC-ODGDEMO. Legacy resolved queried sub-codes to their parent root code; adapter returns the exact sub-code with the current ODG v1.2 name. See Item 2.</td>
+    </tr>
+    <tr>
+      <td><code>EXPECTED_DIFF</code> — Extra activitymod entries</td>
+      <td>3</td>
+      <td><span class="badge badge-warn">No (accepted / pending)</span></td>
+      <td>MLC-ODGDEMO, CityofFortWorth, PSWCA. ODG v1.2 returns more <code>activitymod</code> records for certain ICD codes than the legacy content tables. See Item 3.</td>
+    </tr>
+    <tr>
+      <td><code>CONTENT_MISMATCH</code></td>
+      <td>0</td>
+      <td><span class="badge badge-pass">N/A</span></td>
+      <td>No true content mismatches in this run.</td>
+    </tr>
+    <tr>
+      <td><code>FORMAT_MISMATCH</code></td>
+      <td>0</td>
+      <td><span class="badge badge-pass">N/A</span></td>
+      <td>No format mismatches in this run.</td>
+    </tr>
+    <tr>
+      <td><code>PARSE_ERROR</code></td>
+      <td>0</td>
+      <td><span class="badge badge-pass">N/A</span></td>
+      <td>No parse errors in this run.</td>
+    </tr>
+    <tr>
+      <td><code>NETWORK_ERROR</code></td>
+      <td>0</td>
+      <td><span class="badge badge-pass">N/A</span></td>
+      <td>No network errors in this run.</td>
+    </tr>
+    <tr>
+      <td><strong>Total</strong></td>
+      <td><strong>417</strong></td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2>Executive Summary</h2>
+
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="number num-blue">417</div>
+    <div class="label">Total Tests</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-green">402</div>
+    <div class="label">PASS (96.4%)</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-orange">12</div>
+    <div class="label">Product Accepted</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-purple">3</div>
+    <div class="label">Pending SEAD</div>
+  </div>
+</div>
+
+<p>
+  15 tests have discrepancies. All 15 are either product-confirmed accepted behaviors (12 tests) or pending SEAD team content verification (3 tests). No adapter code changes are required for any of the items in this report.
+</p>
+
+<h3>Results by Customer</h3>
+<table>
+  <thead>
+    <tr>
+      <th>Customer</th>
+      <th>Tests Run</th>
+      <th>PASS</th>
+      <th>Product Accepted</th>
+      <th>Pending SEAD</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>MLC-ODGDEMO</td>
+      <td>50</td>
+      <td><span class="badge badge-pass">46</span></td>
+      <td><span class="badge badge-accepted">3</span></td>
+      <td><span class="badge badge-pending">1</span></td>
+    </tr>
+    <tr>
+      <td>OrchidMedical-ODGDEMO</td>
+      <td>50</td>
+      <td><span class="badge badge-pass">50</span></td>
+      <td>—</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td>Symetra-ODGDEMO</td>
+      <td>50</td>
+      <td><span class="badge badge-pass">41</span></td>
+      <td><span class="badge badge-accepted">9</span></td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td>CityofFortWorth-ODGWEBSVCS</td>
+      <td>50</td>
+      <td><span class="badge badge-pass">49</span></td>
+      <td>—</td>
+      <td><span class="badge badge-pending">1</span></td>
+    </tr>
+    <tr>
+      <td>JohnsEastern-ODGWEBSVCS</td>
+      <td>50</td>
+      <td><span class="badge badge-pass">50</span></td>
+      <td>—</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td>jwsoftware-ODGWEBSVCS</td>
+      <td>5</td>
+      <td><span class="badge badge-pass">5</span></td>
+      <td>—</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td>MissouriEmployersMut-ODGWEBSVCS</td>
+      <td>50</td>
+      <td><span class="badge badge-pass">50</span></td>
+      <td>—</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td>Origami-ODGWEBSVCS</td>
+      <td>50</td>
+      <td><span class="badge badge-pass">50</span></td>
+      <td>—</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td>paradigm-ODGWEBSVCS</td>
+      <td>12</td>
+      <td><span class="badge badge-pass">12</span></td>
+      <td>—</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td>PSWCA-ODGWEBSVCS</td>
+      <td>50</td>
+      <td><span class="badge badge-pass">49</span></td>
+      <td>—</td>
+      <td><span class="badge badge-pending">1</span></td>
+    </tr>
+    <tr>
+      <td><strong>Total</strong></td>
+      <td><strong>417</strong></td>
+      <td><strong><span class="badge badge-pass">402 (96.4%)</span></strong></td>
+      <td><strong><span class="badge badge-accepted">12</span></strong></td>
+      <td><strong><span class="badge badge-pending">3</span></strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2>Open Items</h2>
+
+<!-- ==================== ITEM 1: DROP-DIGIT / HTTP STATUS ==================== -->
+<h3>Item 1 — Legacy Drop-Digit Fallback: 5-digit ICD-9 Procedure Codes &nbsp;<span class="badge badge-accepted">PRODUCT ACCEPTED</span></h3>
+
+<p>
+  9 tests in Symetra-ODGDEMO return HTTP 200 from the legacy API but HTTP 404 from the adapter. All involve 5-digit ICD-9 procedure codes (e.g. <code>10121</code>, <code>25111</code>, <code>63047</code>) or a malformed code (<code>5522.32XA</code>). These codes have no exact match in the ODG v1.2 guidelines index.
+</p>
+
+<div class="warn">
+  <strong>Root cause — Legacy drop-digit fallback vs. ODG exact match:</strong> The legacy PHP system applied a drop-digit (parent-code fallback) algorithm: when a queried ICD code is not found as an exact match, it progressively strips one trailing digit at a time until it finds a matching record. For example, <code>10121</code> would be tried as <code>10121</code> → <code>1012</code> → <code>101</code>. The ODG v1.2 API performs an exact-code lookup only and applies no drop-digit fallback.
+  <br/><br/>
+  <strong>Product decision — confirmed, no adapter fix:</strong> The adapter should not auto-correct or apply a drop-digit fallback for unrecognised codes. Silently normalising a submitted code risks returning guidelines for a different code than the one the caller intended, which could cause clinical confusion. The HTTP 404 response from the adapter for these codes is therefore correct and expected behavior. The affected customer (Symetra) should be advised to submit valid ICD-9 or ICD-10 codes that exist in the ODG v1.2 index.
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Test</th>
+      <th>ICD Code Submitted</th>
+      <th>URL Path</th>
+      <th>Legacy</th>
+      <th>Adapter</th>
+      <th>Code Type</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Symetra-ODGDEMO-TEST-12</td>
+      <td><code>10121</code></td>
+      <td><code>restws/bpguide/icd/10121/format/json</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>ICD-9 procedure</td>
+    </tr>
+    <tr>
+      <td>Symetra-ODGDEMO-TEST-13</td>
+      <td><code>25111</code></td>
+      <td><code>restws/bpguide/icd/25111/format/json</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>ICD-9 procedure</td>
+    </tr>
+    <tr>
+      <td>Symetra-ODGDEMO-TEST-17</td>
+      <td><code>33881</code></td>
+      <td><code>restws/bpguide/icd/33881/format/json</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>ICD-9 procedure</td>
+    </tr>
+    <tr>
+      <td>Symetra-ODGDEMO-TEST-19</td>
+      <td><code>43775</code></td>
+      <td><code>restws/bpguide/icd/43775/format/json</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>ICD-9 procedure</td>
+    </tr>
+    <tr>
+      <td>Symetra-ODGDEMO-TEST-21</td>
+      <td><code>50545</code></td>
+      <td><code>restws/bpguide/icd/50545/format/json</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>ICD-9 procedure</td>
+    </tr>
+    <tr>
+      <td>Symetra-ODGDEMO-TEST-22</td>
+      <td><code>5522.32XA</code></td>
+      <td><code>restws/bpguide/icd/5522.32XA/format/json</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>Malformed code</td>
+    </tr>
+    <tr>
+      <td>Symetra-ODGDEMO-TEST-23</td>
+      <td><code>58150</code></td>
+      <td><code>restws/bpguide/icd/58150/format/json</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>ICD-9 procedure</td>
+    </tr>
+    <tr>
+      <td>Symetra-ODGDEMO-TEST-24</td>
+      <td><code>63047</code></td>
+      <td><code>restws/bpguide/icd/63047/format/json</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>ICD-9 procedure</td>
+    </tr>
+    <tr>
+      <td>Symetra-ODGDEMO-TEST-26</td>
+      <td><code>791.51</code></td>
+      <td><code>restws/bpguide/icd/791.51/format/json</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>ICD-9 diagnosis (not in v1.2 index)</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<!-- ==================== ITEM 2: ICD NORMALIZATION ==================== -->
+<h3>Item 2 — Legacy Parent-Code Resolution for ICD Sub-codes &nbsp;<span class="badge badge-accepted">PRODUCT ACCEPTED</span></h3>
+
+<p>
+  3 tests in MLC-ODGDEMO show a difference in the returned <code>icdcode</code> and <code>name</code> fields. When a customer queries an ICD-10 sub-code (e.g. <code>F22.0</code>), the legacy system resolves it to the parent code (<code>F22</code>) using the same drop-digit fallback algorithm and returns the name from an older content snapshot. The adapter returns the queried sub-code as-is with the current ODG v1.2 name.
+</p>
+
+<div class="warn">
+  <strong>Root cause — Legacy drop-digit parent-code resolution vs. ODG exact match:</strong> The legacy PHP system stripped the decimal suffix from codes like <code>F22.0</code> when no exact match existed and returned guidelines for the parent code <code>F22</code>. Because MLC-ODGDEMO is an Australian customer and these codes (<code>F22.0</code>, <code>F23.9</code>, <code>F41.2</code>) exist in the AU ODG v1.2 index as exact sub-codes, the adapter finds and returns them directly — resulting in a different <code>icdcode</code> and <code>name</code> in the response.
+  <br/><br/>
+  <strong>Product decision — confirmed, no adapter fix:</strong> The adapter should not resolve a queried ICD sub-code to its parent. Returning a different code than the one submitted could cause clinical confusion. The adapter output (exact sub-code with current v1.2 content name) is correct and expected behavior. This decision is consistent with the same resolution applied to the drop-digit fallback cases above.
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Test</th>
+      <th>Queried ICD</th>
+      <th>Property Path</th>
+      <th>Legacy Value</th>
+      <th>Adapter Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>MLC-ODGDEMO-TEST-26</td>
+      <td><code>F22.0</code></td>
+      <td><code>item[icd=F22].icdcode</code></td>
+      <td><code>F22</code></td>
+      <td><code>F22.0</code></td>
+    </tr>
+    <tr>
+      <td>MLC-ODGDEMO-TEST-26</td>
+      <td><code>F22.0</code></td>
+      <td><code>item[icd=F22].name</code></td>
+      <td><code>Delusional disorders</code></td>
+      <td><code>Delusional disorder</code></td>
+    </tr>
+    <tr>
+      <td>MLC-ODGDEMO-TEST-27</td>
+      <td><code>F23.9</code></td>
+      <td><code>item[icd=F23].icdcode</code></td>
+      <td><code>F23</code></td>
+      <td><code>F23.9</code></td>
+    </tr>
+    <tr>
+      <td>MLC-ODGDEMO-TEST-27</td>
+      <td><code>F23.9</code></td>
+      <td><code>item[icd=F23].name</code></td>
+      <td><code>Brief psychotic disorder</code></td>
+      <td><code>Acute and transient psychotic disorder, unspecified</code></td>
+    </tr>
+    <tr>
+      <td>MLC-ODGDEMO-TEST-36</td>
+      <td><code>F41.2</code></td>
+      <td><code>item[icd=F41].icdcode</code></td>
+      <td><code>F41</code></td>
+      <td><code>F41.2</code></td>
+    </tr>
+    <tr>
+      <td>MLC-ODGDEMO-TEST-36</td>
+      <td><code>F41.2</code></td>
+      <td><code>item[icd=F41].name</code></td>
+      <td><code>Other anxiety disorders</code></td>
+      <td><code>Mixed anxiety and depressive disorder</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<!-- ==================== ITEM 3: ACTIVITY MODIFIERS ==================== -->
+<h3>Item 3 — Additional Activity Modifiers in ODG v1.2 &nbsp;<span class="badge badge-pending">PENDING SEAD</span></h3>
+
+<p>
+  3 tests show ODG v1.2 returning a larger set of <code>activitymod</code> entries than the legacy system for certain ICD codes. The adapter faithfully returns the richer dataset from ODG v1.2. This is consistent with newer activity modifier records being added to v1.2 content that were never back-published to the legacy tables.
+</p>
+
+<div class="pending">
+  <strong>Action required — SEAD team:</strong> Confirm that the additional <code>activitymod</code> entries listed below in ODG v1.2 are correct, current, and intentionally published content.
+  <ul>
+    <li><code>G90.5</code> — 2 extra entries: <em>Lifting over shoulder</em> / <em>Clerical lifting</em></li>
+    <li><code>M79.629</code> — 1 extra entry: <em>No overhead work / no reaching to shoulder level</em></li>
+    <li><code>M79.64</code> — 1 extra entry: <em>No overhead work / no reaching to shoulder level</em></li>
+  </ul>
+  If confirmed as correct content: the legacy tables are missing these records due to a publishing gap — no ODG v1.2 or adapter change is needed.
+  <br/>
+  If these are draft or incorrect entries in v1.2: they should be corrected in the content publishing pipeline before cutover.
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Test</th>
+      <th>Customer</th>
+      <th>ICD Code</th>
+      <th>Property</th>
+      <th>Legacy Count</th>
+      <th>Adapter Count</th>
+      <th>Extra entries in adapter</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>MLC-ODGDEMO-TEST-50</td>
+      <td>MLC-ODGDEMO</td>
+      <td><code>G90.5</code></td>
+      <td><code>item[icd=G90.5].activitymod.length</code></td>
+      <td>4</td>
+      <td>6</td>
+      <td>+2 (Lifting over shoulder / Clerical lifting)</td>
+    </tr>
+    <tr>
+      <td>CityofFortWorth-ODGWEBSVCS-TEST-4</td>
+      <td>CityofFortWorth</td>
+      <td><code>M79.629</code></td>
+      <td><code>item[icd=M79.629].activitymod.length</code></td>
+      <td>3</td>
+      <td>4</td>
+      <td>+1 (No overhead work / no reaching to shoulder level)</td>
+    </tr>
+    <tr>
+      <td>PSWCA-ODGWEBSVCS-TEST-30</td>
+      <td>PSWCA</td>
+      <td><code>M79.64</code></td>
+      <td><code>item[icd=M79.64].activitymod.length</code></td>
+      <td>3</td>
+      <td>4</td>
+      <td>+1 (No overhead work / no reaching to shoulder level)</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2>Summary</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Item</th>
+      <th>Failing Tests</th>
+      <th>Affected Customer(s)</th>
+      <th>Action Required</th>
+      <th>Owner</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Drop-digit fallback — 5-digit ICD-9 procedure codes</td>
+      <td>9</td>
+      <td>Symetra-ODGDEMO</td>
+      <td>Advise Symetra to submit valid ICD codes that exist in the ODG v1.2 index. No adapter code change. Document as accepted behavior for cutover planning.</td>
+      <td><strong>Customer communication</strong></td>
+      <td><span class="badge badge-accepted">PRODUCT ACCEPTED</span></td>
+    </tr>
+    <tr>
+      <td>Legacy parent-code resolution — ICD sub-code normalization</td>
+      <td>3</td>
+      <td>MLC-ODGDEMO</td>
+      <td>Adapter returns exact sub-code with current v1.2 content name — correct behavior per product decision. No adapter code change.</td>
+      <td><strong>Customer communication</strong></td>
+      <td><span class="badge badge-accepted">PRODUCT ACCEPTED</span></td>
+    </tr>
+    <tr>
+      <td>Additional activity modifiers in ODG v1.2</td>
+      <td>3</td>
+      <td>MLC-ODGDEMO, CityofFortWorth, PSWCA</td>
+      <td>Confirm that extra <code>activitymod</code> entries for <code>G90.5</code>, <code>M79.629</code>, <code>M79.64</code> in ODG v1.2 are correct published content and not a draft or error.</td>
+      <td><strong>SEAD team</strong></td>
+      <td><span class="badge badge-pending">PENDING SEAD</span></td>
+    </tr>
+  </tbody>
+</table>
+
+</body>
+</html>

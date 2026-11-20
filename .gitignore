@@ -10,8 +10,8 @@ node_modules/
 dist/
 api-tester/tests-scripts/sgo-test/
 
-# Generated HTML reports — contain operational/customer data
-docs/
+# Generated Archived HTML reports — contain operational/customer data
+docs/archives
 
 # AI assistant project config
 .claude/

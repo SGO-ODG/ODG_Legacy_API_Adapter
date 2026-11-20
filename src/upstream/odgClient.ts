@@ -16,6 +16,7 @@ export class UpstreamError extends Error {
   constructor(
     public readonly statusCode: number | undefined,
     message: string,
+    public readonly upstreamBody?: unknown,
   ) {
     super(message);
     this.name = 'UpstreamError';
@@ -92,10 +93,11 @@ function buildClient(): AxiosInstance {
 
       // Wrap all upstream errors so callers never see raw Axios errors
       const status: number | undefined = error.response?.status;
+      const body: unknown = error.response?.data;
       const msg = status
         ? `Upstream returned HTTP ${status}`
         : `Upstream request failed: ${error.message}`;
-      throw new UpstreamError(status, msg);
+      throw new UpstreamError(status, msg, body);
     },
   );
 

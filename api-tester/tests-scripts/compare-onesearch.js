@@ -41,6 +41,7 @@ require('dotenv').config({ path: path.join(projectRoot, '.env') });
 
 const axios           = require(path.join(projectRoot, 'node_modules', 'axios')).default ?? require(path.join(projectRoot, 'node_modules', 'axios'));
 const { XMLParser }   = require(path.join(projectRoot, 'node_modules', 'fast-xml-parser'));
+const https           = require('https');
 
 // ---------------------------------------------------------------------------
 // Config
@@ -534,7 +535,8 @@ async function callApi(url, xmlBody, apiKey, label) {
       },
       validateStatus: () => true,   // don't throw on 4xx/5xx
       timeout: 30000,
-      responseType: 'text'
+      responseType: 'text',
+      httpsAgent: url.startsWith('https://localhost') ? new https.Agent({ rejectUnauthorized: false }) : undefined
     });
     const contentType = response.headers['content-type'] || '';
     if (DEBUG) {

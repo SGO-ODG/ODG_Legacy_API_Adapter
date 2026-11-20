@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ODG Legacy API Adapter — Sequence Diagram</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #172B4D;
+      max-width: 1180px;
+      margin: 40px auto;
+      padding: 0 24px;
+      line-height: 1.6;
+    }
+    h1 { font-size: 24px; border-bottom: 2px solid #DFE1E6; padding-bottom: 8px; margin-top: 32px; }
+    h2 { font-size: 18px; border-bottom: 1px solid #DFE1E6; padding-bottom: 6px; margin-top: 36px; color: #0052CC; }
+    p  { margin: 10px 0; }
+    code {
+      background: #F4F5F7;
+      border: 1px solid #DFE1E6;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: "Courier New", monospace;
+      font-size: 11px;
+    }
+    .note-box  { background: #DEEBFF; border-left: 4px solid #0052CC;  padding: 10px 14px; border-radius: 3px; margin: 12px 0; font-size: 13px; }
+    .warn-box  { background: #FFFAE6; border-left: 4px solid #FF8B00;  padding: 10px 14px; border-radius: 3px; margin: 12px 0; font-size: 13px; }
+    .error-box { background: #FFEBE6; border-left: 4px solid #DE350B;  padding: 10px 14px; border-radius: 3px; margin: 12px 0; font-size: 13px; }
+    hr { border: none; border-top: 1px solid #DFE1E6; margin: 36px 0; }
+
+    /* ── Legend table ──────────────────────────────── */
+    .leg { border-collapse: collapse; width: 100%; font-size: 13px; margin: 14px 0; }
+    .leg th { background: #F4F5F7; color: #5E6C84; font-weight: bold; padding: 7px 10px; border: 1px solid #DFE1E6; text-align: left; }
+    .leg td { border: 1px solid #DFE1E6; padding: 7px 10px; vertical-align: top; }
+    .leg tr:nth-child(even) td { background: #F4F5F7; }
+
+    /* ── Sequence diagram table ────────────────────── */
+    .seq { border-collapse: collapse; width: 100%; table-layout: fixed; }
+
+    /* Actor header cells */
+    .ah-step  { width: 4%;  background: #FFFFFF; border: none; }
+    .ah-cust  { width: 14%; background: #E3FCEF; color: #006644; border: 2px solid #57D9A3; text-align: center; font-weight: bold; font-size: 12px; padding: 8px 4px; }
+    .ah-adapt { width: 20%; background: #DEEBFF; color: #0747A6; border: 2px solid #4C9AFF; text-align: center; font-weight: bold; font-size: 12px; padding: 8px 4px; }
+    .ah-pg    { width: 14%; background: #EAE6FF; color: #403294; border: 2px solid #998DD9; text-align: center; font-weight: bold; font-size: 12px; padding: 8px 4px; }
+    .ah-oauth { width: 13%; background: #FFF0B3; color: #974F0C; border: 2px solid #FFE380; text-align: center; font-weight: bold; font-size: 12px; padding: 8px 4px; }
+    .ah-odg   { width: 14%; background: #E3FCEF; color: #006644; border: 2px solid #79F2C0; text-align: center; font-weight: bold; font-size: 12px; padding: 8px 4px; }
+    .ah-usage { width: 11%; background: #F3EEFF; color: #403294; border: 2px solid #C0B6F2; text-align: center; font-weight: bold; font-size: 12px; padding: 8px 4px; }
+
+    /* Step label column */
+    .s { font-size: 11px; color: #97A0AF; text-align: right; padding: 0 6px 0 0; vertical-align: top; white-space: nowrap; }
+
+    /* Lifeline (non-active actor column) */
+    .ll { border-left: 2px dashed #DFE1E6; padding: 12px 0; }
+
+    /* ── Arrow type classes ──────────────────────────
+       Naming: [type][role]
+         rq = request (blue solid →)
+         rs = response (green solid ←)
+         db = DB query (purple solid →)
+         dr = DB response (purple dashed ←)
+         oa = OAuth request (orange solid →)
+         or = OAuth response (orange dashed ←)
+         as = async fire-and-forget (grey dashed →)
+         er = error response (red solid ←)
+
+         -f  = FROM cell (source, holds label text)
+         -t  = TO cell (destination, holds ► or ◄ + description)
+         -l  = intermediate LINE cell (border-top only, no content)
+    ─────────────────────────────────────────────── */
+
+    /* Request: Customer/Adapter → (blue) */
+    .rq-f { border-top: 2px solid #0052CC; vertical-align: bottom; text-align: right; padding: 2px 4px 3px 0; font-size: 11px; color: #0052CC; }
+    .rq-t { border-top: 2px solid #0052CC; background: #DEEBFF; vertical-align: top; padding: 4px 6px; font-size: 12px; }
+    .rq-l { border-top: 2px solid #0052CC; padding: 0; }
+
+    /* Response: → Customer (green) */
+    .rs-f { border-top: 2px solid #00875A; vertical-align: bottom; text-align: left; padding: 2px 0 3px 4px; font-size: 11px; color: #00875A; }
+    .rs-t { border-top: 2px solid #00875A; background: #E3FCEF; vertical-align: top; padding: 4px 6px; font-size: 12px; }
+    .rs-l { border-top: 2px solid #00875A; padding: 0; }
+
+    /* DB query → (purple solid) */
+    .db-f { border-top: 2px solid #403294; vertical-align: bottom; text-align: right; padding: 2px 4px 3px 0; font-size: 11px; color: #403294; }
+    .db-t { border-top: 2px solid #403294; background: #EAE6FF; vertical-align: top; padding: 4px 6px; font-size: 12px; }
+    .db-l { border-top: 2px solid #403294; padding: 0; }
+
+    /* DB response ← (purple dashed) */
+    .dr-f { border-top: 2px dashed #403294; vertical-align: bottom; text-align: left; padding: 2px 0 3px 4px; font-size: 11px; color: #8777D9; }
+    .dr-t { border-top: 2px dashed #403294; background: #F3EEFF; vertical-align: top; padding: 4px 6px; font-size: 12px; }
+    .dr-l { border-top: 2px dashed #403294; padding: 0; }
+
+    /* OAuth request → (orange solid) */
+    .oa-f { border-top: 2px solid #FF8B00; vertical-align: bottom; text-align: right; padding: 2px 4px 3px 0; font-size: 11px; color: #FF8B00; }
+    .oa-t { border-top: 2px solid #FF8B00; background: #FFF0B3; vertical-align: top; padding: 4px 6px; font-size: 12px; }
+    .oa-l { border-top: 2px solid #FF8B00; padding: 0; }
+
+    /* OAuth response ← (orange dashed) */
+    .or-f { border-top: 2px dashed #FF8B00; vertical-align: bottom; text-align: left; padding: 2px 0 3px 4px; font-size: 11px; color: #FF8B00; }
+    .or-t { border-top: 2px dashed #FF8B00; background: #FFF0B3; vertical-align: top; padding: 4px 6px; font-size: 12px; }
+    .or-l { border-top: 2px dashed #FF8B00; padding: 0; }
+
+    /* Async fire-and-forget → (grey dashed) */
+    .as-f { border-top: 2px dashed #97A0AF; vertical-align: bottom; text-align: right; padding: 2px 4px 3px 0; font-size: 11px; color: #97A0AF; }
+    .as-t { border-top: 2px dashed #97A0AF; background: #F4F5F7; vertical-align: top; padding: 4px 6px; font-size: 12px; color: #5E6C84; }
+    .as-l { border-top: 2px dashed #97A0AF; padding: 0; }
+
+    /* Error response ← (red) */
+    .er-f { border-top: 2px solid #DE350B; vertical-align: bottom; text-align: left; padding: 2px 0 3px 4px; font-size: 11px; color: #DE350B; }
+    .er-t { border-top: 2px solid #DE350B; background: #FFEBE6; vertical-align: top; padding: 4px 6px; font-size: 12px; color: #BF2600; }
+    .er-l { border-top: 2px solid #DE350B; padding: 0; }
+
+    /* Retry request → (orange solid, same as request but distinct) */
+    .re-f { border-top: 2px solid #FF5630; vertical-align: bottom; text-align: right; padding: 2px 4px 3px 0; font-size: 11px; color: #FF5630; }
+    .re-t { border-top: 2px solid #FF5630; background: #FFEBE6; vertical-align: top; padding: 4px 6px; font-size: 12px; }
+    .re-l { border-top: 2px solid #FF5630; padding: 0; }
+
+    /* Internal note in Adapter column */
+    .int { background: #FFFAE6; border: 1px dashed #FFE380; padding: 5px 8px; font-size: 12px; color: #974F0C; border-radius: 3px; }
+
+    /* Alt/opt block labels (full-row) */
+    .alt-hdr  { background: #F0F4FF; padding: 4px 10px; font-size: 12px; font-weight: bold; color: #403294; border-top: 1px solid #B3BAC5; border-bottom: 1px solid #E0E6F0; }
+    .alt-else { background: #F4F5F7; padding: 3px 10px; font-size: 11px; color: #5E6C84; border-top: 1px solid #DFE1E6; border-bottom: 1px solid #DFE1E6; font-style: italic; }
+    .alt-end  { background: #F0F4FF; padding: 2px 10px; font-size: 11px; color: #97A0AF; border-bottom: 1px solid #B3BAC5; }
+
+    /* Spacer row */
+    .sp td { height: 8px; }
+  </style>
+</head>
+<body>
+
+<h1>ODG Legacy API Adapter — Sequence Diagram</h1>
+<p style="color:#5E6C84;font-size:13px;">
+  Node.js / Express &nbsp;·&nbsp; TypeScript &nbsp;·&nbsp; Azure App Service &nbsp;·&nbsp; November 2026
+</p>
+
+<hr />
+
+<!-- ════════════════════════════════════════════════
+     ACTOR & ARROW LEGEND
+     ════════════════════════════════════════════════ -->
+<h2>Actor &amp; Arrow Legend</h2>
+
+<table class="leg">
+  <thead>
+    <tr><th>Actor</th><th>Role</th><th>Tech</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong style="color:#006644;">Legacy Customer</strong></td>
+      <td>Insurance company / TPA calling the adapter using the original legacy PHP API contract</td>
+      <td>Any HTTP client · sends <code>X-ODG-KEY</code> header · GET or POST XML</td>
+    </tr>
+    <tr>
+      <td><strong style="color:#0747A6;">Adapter</strong></td>
+      <td>The Express/Node.js application running on Azure App Service</td>
+      <td>Node.js · TypeScript · Express · <code>src/</code> codebase</td>
+    </tr>
+    <tr>
+      <td><strong style="color:#403294;">PostgreSQL</strong></td>
+      <td>Auth database — read-only lookup for customer and subscription validation</td>
+      <td>Azure PostgreSQL Flexible Server · tables: <code>companymaster</code>, <code>companywebservice</code></td>
+    </tr>
+    <tr>
+      <td><strong style="color:#974F0C;">OAuth Server</strong></td>
+      <td>Issues Bearer tokens for adapter-to-ODG API calls via Client Credentials grant</td>
+      <td>OAuth 2.0 · <code>POST /token</code> · shared credentials in Key Vault</td>
+    </tr>
+    <tr>
+      <td><strong style="color:#006644;">ODG API v1.2</strong></td>
+      <td>Upstream REST API providing clinical data</td>
+      <td><code>api.odgbymcg.com</code> · JSON · <code>X-ApiVersion: 1.2</code></td>
+    </tr>
+    <tr>
+      <td><strong style="color:#403294;">Usage DB</strong></td>
+      <td>Write-only usage logging after every authenticated response</td>
+      <td>Same PostgreSQL server · table: <code>webserviceusage</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="leg" style="margin-top:16px;">
+  <thead>
+    <tr><th>Arrow style</th><th>Meaning</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><span style="color:#0052CC;font-weight:bold;">──────►</span> Solid blue</td><td>Customer or Adapter initiating a request</td></tr>
+    <tr><td><span style="color:#00875A;font-weight:bold;">◄──────</span> Solid green</td><td>Successful response returned to the customer or adapter</td></tr>
+    <tr><td><span style="color:#403294;font-weight:bold;">──────►</span> Solid purple</td><td>Database query (Adapter → PostgreSQL)</td></tr>
+    <tr><td><span style="color:#8777D9;font-weight:bold;">◄╌╌╌╌╌</span> Dashed purple</td><td>Database query result returned to Adapter</td></tr>
+    <tr><td><span style="color:#FF8B00;font-weight:bold;">──────►</span> Solid orange</td><td>OAuth token request (Adapter → OAuth Server)</td></tr>
+    <tr><td><span style="color:#FF8B00;font-weight:bold;">◄╌╌╌╌╌</span> Dashed orange</td><td>OAuth token response</td></tr>
+    <tr><td><span style="color:#97A0AF;font-weight:bold;">╌╌╌╌╌►</span> Dashed grey</td><td>Async fire-and-forget (usage log write — does not block customer response)</td></tr>
+    <tr><td><span style="color:#DE350B;font-weight:bold;">◄──────</span> Solid red</td><td>Error response (403 / 405 / 404 / 500) returned to customer</td></tr>
+    <tr><td><span style="background:#FFFAE6;border:1px dashed #FFE380;padding:1px 6px;font-size:11px;color:#974F0C;">⚙ internal</span></td><td>Adapter-internal processing — no network call</td></tr>
+    <tr><td><span style="background:#F0F4FF;border:1px solid #B3BAC5;padding:1px 6px;font-size:11px;color:#403294;font-weight:bold;">[ alt ]</span></td><td>Alternative flow branch (like UML alt/opt combined fragment)</td></tr>
+  </tbody>
+</table>
+
+<hr />
+
+<!-- ════════════════════════════════════════════════
+     SCENARIO 1: HAPPY PATH
+     ════════════════════════════════════════════════ -->
+<h2>Scenario 1 — Successful Request (Happy Path)</h2>
+<p>
+  A legacy customer sends a valid request with a known, active <code>X-ODG-KEY</code>.
+  Subscription is current. The adapter validates auth, calls ODG API, transforms the response,
+  returns the legacy-format reply, and writes a usage log row asynchronously.
+</p>
+<p>
+  The token cache branch shows both paths: <strong>HIT</strong> (token already cached and valid)
+  and <strong>MISS</strong> (first request, or token expired).
+</p>
+
+<table class="seq">
+  <!-- ── Actor header row ── -->
+  <tr>
+    <td class="ah-step"></td>
+    <td class="ah-cust">Legacy<br/>Customer</td>
+    <td class="ah-adapt">Adapter<br/>(Express / Node.js)</td>
+    <td class="ah-pg">PostgreSQL<br/>(Auth)</td>
+    <td class="ah-oauth">OAuth<br/>Server</td>
+    <td class="ah-odg">ODG API<br/>v1.2</td>
+    <td class="ah-usage">Usage<br/>DB</td>
+  </tr>
+
+  <!-- ── Step 1: Customer → Adapter ── -->
+  <tr>
+    <td class="s">1</td>
+    <td class="rq-f">
+      HTTP GET or POST<br/>
+      <code>X-ODG-KEY: abc123</code><br/>
+      e.g. <code>GET /restws/uradvisor?icd=M54.5</code>
+    </td>
+    <td class="rq-t">
+      <strong style="color:#0052CC;">► Receive Request</strong><br/>
+      <span style="color:#5E6C84;">formatSelectorMiddleware sets<br/>res.locals.legacyFormat = 'xml' | 'json'</span>
+    </td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr class="sp"><td colspan="7"></td></tr>
+
+  <!-- ── Step 2: Adapter → PostgreSQL (companymaster) ── -->
+  <tr>
+    <td class="s">2</td>
+    <td class="ll"></td>
+    <td class="db-f">
+      SELECT companymaster<br/>
+      WHERE webserviceKey = ?
+    </td>
+    <td class="db-t">
+      <strong style="color:#403294;">► companymaster lookup</strong>
+    </td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- ── Step 3: PostgreSQL → Adapter (company record) ── -->
+  <tr>
+    <td class="s">3</td>
+    <td class="ll"></td>
+    <td class="dr-t">
+      <strong style="color:#8777D9;">◄ Company record</strong><br/>
+      <span style="color:#5E6C84;">{ companyCode, companyName, disabled }</span>
+    </td>
+    <td class="dr-f">
+      row returned
+    </td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- ── Internal: disabled check + serviceRegistry ── -->
+  <tr>
+    <td class="s">⚙</td>
+    <td class="ll"></td>
+    <td><div class="int">
+      disabled = 'N' ✓<br/>
+      serviceRegistry.lookupServiceCode('uradvisor') = 'URADVISOR' ✓
+    </div></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr class="sp"><td colspan="7"></td></tr>
+
+  <!-- ── Step 4: Adapter → PostgreSQL (companywebservice) ── -->
+  <tr>
+    <td class="s">4</td>
+    <td class="ll"></td>
+    <td class="db-f">
+      SELECT companywebservice<br/>
+      WHERE companyCode AND webserviceCode
+    </td>
+    <td class="db-t">
+      <strong style="color:#403294;">► subscription lookup</strong>
+    </td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- ── Step 5: PostgreSQL → Adapter (subscription) ── -->
+  <tr>
+    <td class="s">5</td>
+    <td class="ll"></td>
+    <td class="dr-t">
+      <strong style="color:#8777D9;">◄ Subscription record</strong><br/>
+      <span style="color:#5E6C84;">{ startDate, endDate, outputMode }</span>
+    </td>
+    <td class="dr-f">
+      row returned
+    </td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- ── Internal: date range validation ── -->
+  <tr>
+    <td class="s">⚙</td>
+    <td class="ll"></td>
+    <td><div class="int">
+      today &ge; subscriptionStartDate ✓<br/>
+      today &le; subscriptionEndDate ✓<br/>
+      req.legacy attached to request
+    </div></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr class="sp"><td colspan="7"></td></tr>
+
+  <!-- ── Alt block: Token cache ── -->
+  <tr>
+    <td></td>
+    <td colspan="6" class="alt-hdr">[ alt ]&nbsp; Token cache HIT — Bearer token cached and not yet expired</td>
+  </tr>
+
+  <!-- HIT branch: internal note only -->
+  <tr>
+    <td class="s">⚙</td>
+    <td class="ll"></td>
+    <td><div class="int">
+      tokenCache.getToken() → valid<br/>
+      use cached Bearer token (no network call)
+    </div></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- else: MISS -->
+  <tr>
+    <td></td>
+    <td colspan="6" class="alt-else">[ else ]&nbsp; Token cache MISS — first request, or token expired</td>
+  </tr>
+
+  <!-- Step 6a: Adapter → OAuth -->
+  <tr>
+    <td class="s">6a</td>
+    <td class="ll"></td>
+    <td class="oa-f">
+      POST /token<br/>
+      grant_type=client_credentials<br/>
+      client_id / client_secret
+    </td>
+    <td class="oa-l"></td>
+    <td class="oa-t">
+      <strong style="color:#974F0C;">► Token request</strong>
+    </td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- Step 6b: OAuth → Adapter -->
+  <tr>
+    <td class="s">6b</td>
+    <td class="ll"></td>
+    <td class="or-t">
+      <strong style="color:#974F0C;">◄ Token issued</strong><br/>
+      <span style="color:#5E6C84;">{ access_token, token_type: Bearer, expires_in }</span>
+    </td>
+    <td class="or-l"></td>
+    <td class="or-f">
+      200 OK · token issued
+    </td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- Internal: cache token -->
+  <tr>
+    <td class="s">⚙</td>
+    <td class="ll"></td>
+    <td><div class="int">
+      Store token in memory cache<br/>
+      expiry = now + expires_in &minus; skew<br/>
+      (skew = min(60s, 10% of lifetime))
+    </div></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- end alt -->
+  <tr>
+    <td></td>
+    <td colspan="6" class="alt-end">[ end alt ]</td>
+  </tr>
+
+  <tr class="sp"><td colspan="7"></td></tr>
+
+  <!-- ── Step 7: Adapter → ODG API ── -->
+  <tr>
+    <td class="s">7</td>
+    <td class="ll"></td>
+    <td class="rq-f">
+      GET/POST upstream endpoint<br/>
+      Authorization: Bearer &lt;token&gt;<br/>
+      X-ApiVersion: 1.2<br/>
+      (ODG v1.2 request params)
+    </td>
+    <td class="rq-l"></td>
+    <td class="rq-l"></td>
+    <td class="rq-t">
+      <strong style="color:#0052CC;">► API call received</strong><br/>
+      <span style="color:#5E6C84;">e.g. GET /tao/icds?icd10=M54.5&amp;country=US</span>
+    </td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- ── Step 8: ODG API → Adapter ── -->
+  <tr>
+    <td class="s">8</td>
+    <td class="ll"></td>
+    <td class="rs-t">
+      <strong style="color:#00875A;">◄ 200 OK JSON response</strong><br/>
+      <span style="color:#5E6C84;">{ data: [ ... ODG v1.2 schema ... ] }</span>
+    </td>
+    <td class="rs-l"></td>
+    <td class="rs-l"></td>
+    <td class="rs-f">
+      200 OK · JSON body
+    </td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- ── Internal: transform response ── -->
+  <tr>
+    <td class="s">⚙</td>
+    <td class="ll"></td>
+    <td><div class="int">
+      Map ODG JSON → legacy response model<br/>
+      · Rename &amp; deep-lowercase keys (except primaryRTWpath)<br/>
+      · null → "" · strip undefined fields<br/>
+      · Apply array/singleton rules · format currency/dates
+    </div></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr class="sp"><td colspan="7"></td></tr>
+
+  <!-- ── Step 9: Adapter → Customer (success response) ── -->
+  <tr>
+    <td class="s">9</td>
+    <td class="rs-t">
+      <strong style="color:#00875A;">◄ 200 OK legacy response</strong><br/>
+      <span style="color:#5E6C84;">XML (default) or JSON (/format/json)<br/>
+      Content-Type: application/xml or application/json<br/>
+      Exact legacy field names, ordering, envelope</span>
+    </td>
+    <td class="rs-f">
+      serialize legacy model<br/>
+      set Content-Type header
+    </td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr class="sp"><td colspan="7"></td></tr>
+
+  <!-- ── Step 10: Adapter → Usage DB (async) ── -->
+  <tr>
+    <td class="s">10</td>
+    <td class="ll"></td>
+    <td class="as-f">
+      res.on('finish') fires<br/>
+      [after response sent]<br/>
+      async · never blocks
+    </td>
+    <td class="as-l"></td>
+    <td class="as-l"></td>
+    <td class="as-l"></td>
+    <td class="as-t">
+      <strong>╌► INSERT</strong><br/>
+      <span style="font-size:11px;">webserviceusage<br/>(companyCode, service,<br/>ip, time, body, resultCode,<br/>responseTime…)</span>
+    </td>
+  </tr>
+</table>
+
+<hr />
+
+<!-- ════════════════════════════════════════════════
+     SCENARIO 2: AUTHENTICATION FAILURE
+     ════════════════════════════════════════════════ -->
+<h2>Scenario 2 — Authentication Failure</h2>
+<p>
+  The adapter enforces the full legacy auth contract before making any upstream call.
+  Validation runs in order: key lookup → disabled check → service registry → subscription lookup → date range.
+  The first failing check returns the exact legacy error body — no ODG API call is ever made.
+</p>
+
+<table class="seq">
+  <tr>
+    <td class="ah-step"></td>
+    <td class="ah-cust">Legacy<br/>Customer</td>
+    <td class="ah-adapt">Adapter</td>
+    <td class="ah-pg">PostgreSQL</td>
+    <td style="width:13%;background:#FFFFFF;border:none;"></td>
+    <td style="width:14%;background:#FFFFFF;border:none;"></td>
+    <td style="width:11%;background:#FFFFFF;border:none;"></td>
+  </tr>
+
+  <!-- Step 1: Request arrives -->
+  <tr>
+    <td class="s">1</td>
+    <td class="rq-f">HTTP Request<br/><code>X-ODG-KEY: ?</code></td>
+    <td class="rq-t">
+      <strong style="color:#0052CC;">► Receive Request</strong>
+    </td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- Alt block covering all 5 failure modes -->
+  <tr>
+    <td></td>
+    <td colspan="6" class="alt-hdr">[ alt ]&nbsp; Missing or unrecognised X-ODG-KEY header</td>
+  </tr>
+  <tr>
+    <td class="s">2a</td>
+    <td class="er-t">
+      <strong>◄ 403 Forbidden</strong><br/>
+      <code>{ "error": "Invalid web service key." }</code>
+    </td>
+    <td class="er-f">key absent or not in companymaster</td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr>
+    <td></td>
+    <td colspan="6" class="alt-else">[ else ]&nbsp; Key found — companymaster.disabled = 'Y'</td>
+  </tr>
+  <tr>
+    <td class="s">2b</td>
+    <td class="er-t">
+      <strong>◄ 403 Forbidden</strong><br/>
+      <code>{ "error": "Your account is disabled." }</code>
+    </td>
+    <td class="er-f">disabled flag is 'Y'</td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr>
+    <td></td>
+    <td colspan="6" class="alt-else">[ else ]&nbsp; Company valid — service not in static registry</td>
+  </tr>
+  <tr>
+    <td class="s">2c</td>
+    <td class="er-t">
+      <strong>◄ 403 Forbidden</strong><br/>
+      <code>{ "error": "Invalid, requested web service does not exist." }</code>
+    </td>
+    <td class="er-f">path not in serviceRegistry</td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr>
+    <td></td>
+    <td colspan="6" class="alt-else">[ else ]&nbsp; Service valid — no companywebservice row</td>
+  </tr>
+  <tr>
+    <td class="s">2d</td>
+    <td class="er-t">
+      <strong>◄ 403 Forbidden</strong><br/>
+      <code>{ "error": "You are not subscribed for requested web service." }</code>
+    </td>
+    <td class="er-f">no subscription record</td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr>
+    <td></td>
+    <td colspan="6" class="alt-else">[ else ]&nbsp; Subscription exists — today &lt; subscriptionStartDate</td>
+  </tr>
+  <tr>
+    <td class="s">2e</td>
+    <td class="er-t">
+      <strong>◄ 403 Forbidden</strong><br/>
+      <code>{ "error": "Your subscription will start from MM/DD/YYYY." }</code>
+    </td>
+    <td class="er-f">before start date</td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr>
+    <td></td>
+    <td colspan="6" class="alt-else">[ else ]&nbsp; today &gt; subscriptionEndDate</td>
+  </tr>
+  <tr>
+    <td class="s">2f</td>
+    <td class="er-t">
+      <strong>◄ 403 Forbidden</strong><br/>
+      <code>{ "error": "Your subscription is expired on MM/DD/YYYY." }</code>
+    </td>
+    <td class="er-f">after end date</td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr>
+    <td></td>
+    <td colspan="6" class="alt-else">[ else ]&nbsp; Wrong HTTP method for a valid route (e.g. POST /uradvisor)</td>
+  </tr>
+  <tr>
+    <td class="s">2g</td>
+    <td class="er-t">
+      <strong>◄ 405 Method Not Allowed</strong><br/>
+      <code>{ "error": "Unknown method" }</code>
+    </td>
+    <td class="er-f">method not registered</td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr>
+    <td></td>
+    <td colspan="6" class="alt-end">[ end alt ]&nbsp; — no ODG API call is made in any failure branch</td>
+  </tr>
+</table>
+
+<div class="warn-box">
+  <strong>Key design rule:</strong> All auth validation runs before any attempt to fetch a Bearer token or call ODG API.
+  OAuth credentials and upstream URLs are <strong>never exposed</strong> to the customer in any error response.
+</div>
+
+<hr />
+
+<!-- ════════════════════════════════════════════════
+     SCENARIO 3: UPSTREAM 401 — TOKEN REFRESH & RETRY
+     ════════════════════════════════════════════════ -->
+<h2>Scenario 3 — Upstream 401: Token Invalidation and Single Retry</h2>
+<p>
+  If ODG API returns <code>401 Unauthorized</code> (e.g. token expired mid-flight between the
+  cache skew check and the actual call), the adapter invalidates the cached token, fetches one
+  fresh token, and retries the original request exactly once. If the retry also fails,
+  the adapter maps the error to a safe legacy error response — the customer never sees a
+  raw upstream 401 or any OAuth detail.
+</p>
+
+<table class="seq">
+  <tr>
+    <td class="ah-step"></td>
+    <td class="ah-cust">Legacy<br/>Customer</td>
+    <td class="ah-adapt">Adapter</td>
+    <td class="ah-pg">PostgreSQL</td>
+    <td class="ah-oauth">OAuth<br/>Server</td>
+    <td class="ah-odg">ODG API<br/>v1.2</td>
+    <td style="width:11%;background:#FFFFFF;border:none;"></td>
+  </tr>
+
+  <!-- Auth steps (abbreviated) -->
+  <tr>
+    <td class="s">1–5</td>
+    <td class="rq-f">HTTP Request<br/><code>X-ODG-KEY</code></td>
+    <td class="rq-t">
+      <strong style="color:#0052CC;">► Auth validated</strong><br/>
+      <span style="color:#5E6C84;">(companymaster + companywebservice — see Scenario 1)</span>
+    </td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr class="sp"><td colspan="7"></td></tr>
+
+  <!-- Step 6: First attempt to call ODG API (token appears valid but is rejected) -->
+  <tr>
+    <td class="s">6</td>
+    <td class="ll"></td>
+    <td class="rq-f">
+      1st attempt<br/>
+      Authorization: Bearer &lt;stale token&gt;<br/>
+      X-ApiVersion: 1.2
+    </td>
+    <td class="rq-l"></td>
+    <td class="rq-l"></td>
+    <td class="rq-t">
+      <strong style="color:#0052CC;">► Request received</strong>
+    </td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- Step 7: ODG API returns 401 -->
+  <tr>
+    <td class="s">7</td>
+    <td class="ll"></td>
+    <td class="er-t">
+      <strong>◄ 401 Unauthorized</strong><br/>
+      <span style="color:#5E6C84;">token rejected by ODG API</span>
+    </td>
+    <td class="er-l"></td>
+    <td class="er-l"></td>
+    <td class="er-f">
+      401 · token invalid/expired
+    </td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- Internal: invalidate cache -->
+  <tr>
+    <td class="s">⚙</td>
+    <td class="ll"></td>
+    <td><div class="int">
+      Received 401 on first attempt<br/>
+      tokenCache.invalidateToken() — remove cached token<br/>
+      mark request as _retry = true
+    </div></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr class="sp"><td colspan="7"></td></tr>
+
+  <!-- Step 8: Fetch new token -->
+  <tr>
+    <td class="s">8</td>
+    <td class="ll"></td>
+    <td class="oa-f">
+      POST /token<br/>
+      grant_type=client_credentials
+    </td>
+    <td class="oa-l"></td>
+    <td class="oa-t">
+      <strong style="color:#974F0C;">► Fetch new token</strong>
+    </td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- Step 9: New token received -->
+  <tr>
+    <td class="s">9</td>
+    <td class="ll"></td>
+    <td class="or-t">
+      <strong style="color:#974F0C;">◄ New token issued</strong><br/>
+      <span style="color:#5E6C84;">{ access_token, expires_in }</span>
+    </td>
+    <td class="or-l"></td>
+    <td class="or-f">
+      200 OK · new token
+    </td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- Internal: cache new token -->
+  <tr>
+    <td class="s">⚙</td>
+    <td class="ll"></td>
+    <td><div class="int">
+      Store new token in memory cache with updated expiry
+    </div></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr class="sp"><td colspan="7"></td></tr>
+
+  <!-- Step 10: Retry the original request -->
+  <tr>
+    <td class="s">10</td>
+    <td class="ll"></td>
+    <td class="re-f">
+      2nd attempt (retry once)<br/>
+      Authorization: Bearer &lt;new token&gt;<br/>
+      X-ApiVersion: 1.2
+    </td>
+    <td class="re-l"></td>
+    <td class="re-l"></td>
+    <td class="re-t">
+      <strong style="color:#FF5630;">► Retry received</strong>
+    </td>
+    <td class="ll"></td>
+  </tr>
+
+  <!-- Alt: retry success or failure -->
+  <tr>
+    <td></td>
+    <td colspan="6" class="alt-hdr">[ alt ]&nbsp; Retry succeeds — ODG API returns 200</td>
+  </tr>
+
+  <tr>
+    <td class="s">11a</td>
+    <td class="ll"></td>
+    <td class="rs-t">
+      <strong style="color:#00875A;">◄ 200 OK JSON</strong><br/>
+      <span style="color:#5E6C84;">normal response processing continues (see Scenario 1 steps 8–10)</span>
+    </td>
+    <td class="rs-l"></td>
+    <td class="rs-l"></td>
+    <td class="rs-f">200 OK</td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr>
+    <td></td>
+    <td colspan="6" class="alt-else">[ else ]&nbsp; Retry also fails (second 401 or other error)</td>
+  </tr>
+
+  <tr>
+    <td class="s">11b</td>
+    <td class="ll"></td>
+    <td><div class="int" style="border-color:#DE350B;background:#FFEBE6;color:#BF2600;">
+      UpstreamError thrown · map to safe legacy error body<br/>
+      (never expose raw 401 or OAuth detail to customer)
+    </div></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr>
+    <td class="s">11c</td>
+    <td class="er-t">
+      <strong>◄ Legacy error response</strong><br/>
+      <span style="font-size:11px;">e.g. 404 "No results found for ICD/Treatment code"</span>
+    </td>
+    <td class="er-f">
+      mapped legacy error<br/>never raw upstream body
+    </td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+    <td class="ll"></td>
+  </tr>
+
+  <tr>
+    <td></td>
+    <td colspan="6" class="alt-end">[ end alt ]</td>
+  </tr>
+</table>
+
+<div class="note-box">
+  <strong>Single-flight token refresh:</strong> If two requests arrive simultaneously when the token
+  is expired, only one network call to the OAuth server is made. All concurrent requests share one
+  in-flight promise, preventing a "token thundering herd" on cache miss.
+</div>
+
+<hr />
+
+<!-- ════════════════════════════════════════════════
+     SCENARIO 4: END-TO-END FOR EACH ENDPOINT
+     ════════════════════════════════════════════════ -->
+<h2>Scenario 4 — Endpoint-Specific ODG API Targets</h2>
+<p>
+  After auth and token resolution (steps 1–6 of Scenario 1), each endpoint calls a different
+  ODG v1.2 path. The table below shows what step 7 looks like per endpoint.
+</p>
+
+<table class="leg">
+  <thead>
+    <tr>
+      <th>Legacy endpoint</th>
+      <th>Trigger / input</th>
+      <th>ODG API call (step 7)</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>GET /restws/uradvisor</code></td>
+      <td>ICD code(s) provided</td>
+      <td><code>GET /tao/icds?icd10=M54.5&amp;country=US</code></td>
+      <td>ICD-10 detected by leading letter. If no results and bp/noi present → falls back to <code>/tao/fnol</code>.</td>
+    </tr>
+    <tr>
+      <td><code>GET /restws/uradvisor</code></td>
+      <td>icd=9 or icd=10 (reverse lookup)</td>
+      <td><code>GET /tao/procedures?resulttype=1</code> (ICD-9) or <code>resulttype=2</code> (ICD-10)</td>
+      <td>Returns procedure-to-ICD mapping</td>
+    </tr>
+    <tr>
+      <td><code>GET /restws/uradvisor</code></td>
+      <td>bp + noi only (FNOL)</td>
+      <td><code>GET /tao/fnol/{bp}/{noi}</code></td>
+      <td>Full TAO data returned directly. <code>outputMode=F</code> → <code>FullOutput=1</code> query param.</td>
+    </tr>
+    <tr>
+      <td><code>GET /restws/bpguide</code></td>
+      <td>ICD code(s) provided</td>
+      <td><code>GET /guidelines?icd9=724.2&amp;country=US</code> or <code>icd10=M54.5</code></td>
+      <td>ICD arrays split by family. Single call with all codes of one family.</td>
+    </tr>
+    <tr>
+      <td><code>GET /restws/bpguide</code></td>
+      <td>bp + noi (FNOL)</td>
+      <td><code>GET /tao/fnol/{bp}/{noi}</code> → then <code>GET /guidelines?icd10=...</code></td>
+      <td>FNOL response provides ICD list; second call fetches guidelines for those ICDs.</td>
+    </tr>
+    <tr>
+      <td><code>POST /restws/onesearch</code></td>
+      <td>XML body with <code>&lt;text&gt;</code></td>
+      <td><code>GET /search?query=...&amp;type=icd10search&amp;country=US</code></td>
+      <td>Supported types: icd9search, icd10search, procedurescpt, formularyndc, treatment.</td>
+    </tr>
+    <tr>
+      <td><code>POST /calculator/comorbidity</code></td>
+      <td>XML body</td>
+      <td><code>POST /calculator</code> body: <code>requestedoutput=RasAndRtw</code></td>
+      <td>Returns riskassessment + adjustedduration + adjustedsummaryguidelines. No projectedcosts.</td>
+    </tr>
+    <tr>
+      <td><code>POST /calculator/reserve</code></td>
+      <td>XML body</td>
+      <td><code>POST /calculator</code> body: <code>requestedoutput=RasRtwCosts</code></td>
+      <td>Always returns projectedcosts. Returns adjustedduration only when <code>fulloutput=Y</code>. No adjustedsummaryguidelines.</td>
+    </tr>
+  </tbody>
+</table>
+
+</body>
+</html>

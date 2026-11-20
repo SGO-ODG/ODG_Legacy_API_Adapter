@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>UR Advisor — Adapter Comparison Discrepancy Report</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #172B4D;
+      max-width: 1100px;
+      margin: 40px auto;
+      padding: 0 24px;
+      line-height: 1.6;
+    }
+    h1 { font-size: 26px; border-bottom: 2px solid #DFE1E6; padding-bottom: 8px; margin-top: 32px; }
+    h2 { font-size: 20px; border-bottom: 1px solid #DFE1E6; padding-bottom: 6px; margin-top: 36px; color: #0052CC; }
+    h3 { font-size: 16px; margin-top: 24px; color: #253858; }
+    p  { margin: 10px 0; }
+    ul, ol { margin: 10px 0 10px 24px; }
+    li { margin: 4px 0; }
+    code {
+      background: #F4F5F7;
+      border: 1px solid #DFE1E6;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 14px 0;
+      font-size: 13px;
+    }
+    th {
+      background: #0052CC;
+      color: #fff;
+      text-align: left;
+      padding: 8px 10px;
+    }
+    td {
+      border: 1px solid #DFE1E6;
+      padding: 6px 10px;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #F4F5F7; }
+    .badge {
+      display: inline-block;
+      border-radius: 3px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+    .badge-pass    { background: #E3FCEF; color: #006644; border: 1px solid #57D9A3; }
+    .badge-fail    { background: #FFEBE6; color: #BF2600; border: 1px solid #FF5630; }
+    .badge-warn    { background: #FFFAE6; color: #974F0C; border: 1px solid #FFE380; }
+    .badge-info    { background: #DEEBFF; color: #0747A6; border: 1px solid #4C9AFF; }
+    .badge-pending { background: #EAE6FF; color: #403294; border: 1px solid #998DD9; }
+    .badge-accepted { background: #FFFAE6; color: #974F0C; border: 1px solid #FFE380; }
+    .note {
+      background: #DEEBFF;
+      border-left: 4px solid #0052CC;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .warn {
+      background: #FFFAE6;
+      border-left: 4px solid #FF8B00;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .pending {
+      background: #EAE6FF;
+      border-left: 4px solid #6554C0;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .summary-grid {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+    }
+    .summary-card {
+      flex: 1;
+      min-width: 140px;
+      border: 1px solid #DFE1E6;
+      border-radius: 4px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .summary-card .number { font-size: 32px; font-weight: bold; }
+    .summary-card .label  { font-size: 12px; color: #5E6C84; margin-top: 4px; }
+    .num-green  { color: #006644; }
+    .num-red    { color: #BF2600; }
+    .num-orange { color: #974F0C; }
+    .num-blue   { color: #0052CC; }
+    .num-purple { color: #403294; }
+    hr { border: none; border-top: 1px solid #DFE1E6; margin: 32px 0; }
+  </style>
+</head>
+<body>
+
+<h1>UR Advisor — Adapter Comparison Discrepancy Report</h1>
+<p>
+  <strong>Endpoint:</strong> <code>GET /restws/uradvisor</code> &nbsp;|&nbsp;
+  <strong>Report Date:</strong> 2026-11-17 &nbsp;|&nbsp;
+  <strong>Source CSV:</strong> <code>api-tester/tests-scripts/output/legacy-customer-uradvisor-results.csv</code>
+</p>
+<p>
+  This report covers only open items requiring clarification or a decision from the SEAD team or Product. Adapter-code defects identified during this comparison run have been resolved separately and are not included here.
+</p>
+
+<hr />
+
+<h2>Discrepancy Type Reference</h2>
+<p>
+  Each test case fires both the legacy PHP API and the adapter API in parallel, then compares HTTP status codes and the full parsed response body. Each output row is tagged with one of the following discrepancy types. All types except <code>PASS</code> cause the test to be reported as FAIL.
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Counts as Failure?</th>
+      <th>What It Means</th>
+      <th>Detection Logic</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>PASS</code></td>
+      <td><span class="badge badge-pass">No</span></td>
+      <td>HTTP status codes and full response bodies are identical on both sides. No differences found.</td>
+      <td>Emitted when zero diff rows are produced for a test after all comparison checks complete.</td>
+    </tr>
+    <tr>
+      <td><code>HTTP_STATUS_DIFF</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>Legacy and adapter returned different HTTP status codes. Body comparison is skipped — the status difference is the entire result for that test.</td>
+      <td>Triggered before body parsing when <code>legacyResult.status !== adapterResult.status</code>.</td>
+    </tr>
+    <tr>
+      <td><code>CONTENT_MISMATCH</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>A specific field value differs between legacy and adapter. Array records are matched by code key (ICD code, CPT code, etc.); records unique to one side are silently skipped — only key-matched records are compared.</td>
+      <td>Recursive comparator walks both parsed objects. Any leaf-value difference produces this type.</td>
+    </tr>
+    <tr>
+      <td><code>EMPTY_VS_RESULTS</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>One side returned a non-empty array for a matched section and the other returned an empty array. More severe than a simple count difference — one side has data and the other has none.</td>
+      <td>Triggered when <code>legacy.length &gt; 0 &amp;&amp; adapter.length === 0</code> or vice versa for a matched response section.</td>
+    </tr>
+    <tr>
+      <td><code>FORMAT_MISMATCH</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>Legacy responded with one format (XML or JSON) but the adapter responded with the other.</td>
+      <td>Triggered when <code>detectFormat(legacy) !== detectFormat(adapter)</code> after both HTTP calls succeed with the same status code.</td>
+    </tr>
+    <tr>
+      <td><code>PARSE_ERROR</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>One or both responses could not be parsed as valid XML or JSON. Body comparison is skipped and the parse exception message is recorded in the <code>detail</code> column.</td>
+      <td>Triggered when <code>JSON.parse()</code> or <code>XMLParser.parse()</code> throws for either side's response body.</td>
+    </tr>
+    <tr>
+      <td><code>NETWORK_ERROR</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>The HTTP request to the legacy or adapter host failed at the network level (connection refused, DNS failure, timeout, etc.). No HTTP status code or response body is available.</td>
+      <td>Triggered when <code>axios.get()</code> itself throws — a network-level failure, distinct from an HTTP error response.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>This Run — Test Case Counts by Type</h3>
+<table>
+  <thead>
+    <tr>
+      <th>Discrepancy Type</th>
+      <th>Unique Test Cases</th>
+      <th>Counts as Failure?</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>PASS</code></td>
+      <td>502</td>
+      <td><span class="badge badge-pass">No</span></td>
+      <td>Status and full body matched.</td>
+    </tr>
+    <tr>
+      <td><code>HTTP_STATUS_DIFF</code></td>
+      <td>3</td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>AU content gap (C49.21, C49.22) and ICD code with X placeholder (S022XX) — legacy 200, adapter 404.</td>
+    </tr>
+    <tr>
+      <td><code>CONTENT_MISMATCH</code></td>
+      <td>2</td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>Downstream consequence of drop-digit difference — same root cause as the S022XX HTTP_STATUS_DIFF item above.</td>
+    </tr>
+    <tr>
+      <td><code>EMPTY_VS_RESULTS</code></td>
+      <td>0</td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td><code>FORMAT_MISMATCH</code></td>
+      <td>0</td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td><code>PARSE_ERROR</code></td>
+      <td>0</td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td><code>NETWORK_ERROR</code></td>
+      <td>0</td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td><strong>Total</strong></td>
+      <td><strong>507</strong></td>
+      <td>—</td>
+      <td>—</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2>Executive Summary</h2>
+
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="number num-blue">507</div>
+    <div class="label">Total Tests</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-green">504</div>
+    <div class="label">Resolved / PASS</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-purple">2</div>
+    <div class="label">Pending SEAD</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-orange">1</div>
+    <div class="label">Product Accepted</div>
+  </div>
+</div>
+
+<p>
+  3 tests remain outstanding after adapter fixes. 2 require SEAD team verification of AU content coverage. 1 is a known legacy-only behavior that Product has confirmed the adapter will not replicate, consistent with decisions already documented in the Best Practice Guide and One Search discrepancy reports.
+</p>
+
+<hr />
+
+<h2>Open Items</h2>
+
+<!-- ==================== ITEM 1: AU CONTENT GAP ==================== -->
+<h3>Item 1 — AU Content Gap: ICD-10 codes C49.21 and C49.22 &nbsp;<span class="badge badge-pending">PENDING SEAD</span></h3>
+
+<p>
+  ICD-10 codes <code>C49.21</code> (Malignant neoplasm of connective and soft tissue of right upper limb) and <code>C49.22</code> (left upper limb) exist in the legacy UR Advisor AU dataset — the legacy PHP API returns HTTP 200 with valid AU results for both. The adapter calls the ODG v1.2 API with <code>country/AU</code> and receives no data, returning HTTP 404 to the customer.
+</p>
+
+<div class="pending">
+  <strong>Root cause:</strong> These ICD-10 codes appear to be present in the legacy content database for the AU jurisdiction but have not been published to the ODG v1.2 AU dataset. This is a content publishing gap — not an adapter code defect. The adapter correctly relays the ODG API response.
+  <br /><br />
+  <strong>Action required — SEAD team:</strong> Verify whether <code>C49.21</code> and <code>C49.22</code> are intentionally excluded from the AU ODG v1.2 dataset or missing due to a publishing oversight. If this content should be present, the SEAD team needs to publish it to the ODG API before the adapter can return results for these codes.
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Test Name</th>
+      <th>Customer</th>
+      <th>URL Path</th>
+      <th>Legacy Status</th>
+      <th>Adapter Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>CGU-ODGDEMO-TEST-7</code></td>
+      <td>CGU-ODGDEMO</td>
+      <td><code>restws/uradvisor/icd/C49.21/country/AU</code></td>
+      <td>200</td>
+      <td>404</td>
+    </tr>
+    <tr>
+      <td><code>CGU-ODGDEMO-TEST-8</code></td>
+      <td>CGU-ODGDEMO</td>
+      <td><code>restws/uradvisor/icd/C49.22/country/AU</code></td>
+      <td>200</td>
+      <td>404</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<!-- ==================== ITEM 2: DROP-DIGIT / UPPERCASE X ==================== -->
+<h3>Item 2 — Legacy Drop-Digit Fallback for Unrecognised ICD Codes &nbsp;<span class="badge badge-accepted">PRODUCT ACCEPTED</span></h3>
+
+<p>
+  ICD code <code>S022XX</code> submitted by ReviewWorks contains uppercase X placeholder characters. The legacy PHP API silently truncates or normalises such codes to a valid base code before the upstream lookup and returns HTTP 200. The adapter passes the submitted code as-is to ODG v1.2, which does not recognise it and returns HTTP 404.
+</p>
+
+<div class="warn">
+  <strong>Product decision — confirmed, no adapter fix:</strong> This is a legacy-only drop-digit normalisation behavior. Product has reviewed and confirmed that the adapter should not auto-correct or apply a drop-digit fallback for unrecognised ICD codes. Silently normalising a submitted code risks returning guidelines for a different code than the one the caller intended, which could cause clinical confusion. This decision is consistent with the same resolution already documented in the Best Practice Guide and One Search discrepancy reports.
+  <br /><br />
+  The 404 response from the adapter for <code>S022XX</code> is therefore <strong>correct and expected behavior</strong>. The affected customer (ReviewWorks) should be advised to submit well-formed ICD-10 codes without placeholder X characters. No code change is required in the adapter.
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Test Name</th>
+      <th>Customer</th>
+      <th>URL Path</th>
+      <th>Legacy Status</th>
+      <th>Adapter Status</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>ReviewWorks-TEST-13</code></td>
+      <td>ReviewWorks-ODGWEBSVCS</td>
+      <td><code title="restws/uradvisor/icd/B182~S022XX/cpt/12013">restws/uradvisor/icd/B182~S022XX/cpt/12013</code></td>
+      <td>200</td>
+      <td>404</td>
+      <td>Legacy resolved <code>S022XX</code> via drop-digit fallback. Adapter returns 404 — confirmed correct behavior per product decision.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <strong>Note on ReviewWorks-TEST-14:</strong> A second test (<code>restws/uradvisor/icd/B182~S022XX/cpt/99291</code>) uses the same input and also contains this code. That test returned HTTP 200 on both sides but showed a content mismatch: the legacy matched <code>S02.2</code> (after drop-digit resolution) while the adapter matched <code>B18.2</code> (the other code in the request). The content mismatch is a downstream consequence of the same drop-digit difference — once the customer submits a well-formed code, both sides will resolve the same ICD.
+</div>
+
+<hr />
+
+<h2>Summary</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Item</th>
+      <th>Failing Tests</th>
+      <th>Affected Customer</th>
+      <th>Action Required</th>
+      <th>Owner</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>AU content gap — C49.21, C49.22</td>
+      <td>2</td>
+      <td>CGU-ODGDEMO</td>
+      <td>Verify whether these ICD-10 codes are published to the AU ODG v1.2 dataset. Publish if confirmed gap.</td>
+      <td><strong>SEAD team</strong></td>
+      <td><span class="badge badge-pending">PENDING SEAD</span></td>
+    </tr>
+    <tr>
+      <td>Drop-digit fallback — <code>S022XX</code></td>
+      <td>1 (+ 1 related content mismatch)</td>
+      <td>ReviewWorks-ODGWEBSVCS</td>
+      <td>Advise customer to submit well-formed ICD-10 codes without uppercase X placeholders. No adapter code change. Document as accepted behavior.</td>
+      <td><strong>Customer communication</strong></td>
+      <td><span class="badge badge-accepted">PRODUCT ACCEPTED</span></td>
+    </tr>
+  </tbody>
+</table>
+
+</body>
+</html>

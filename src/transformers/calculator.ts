@@ -64,8 +64,10 @@ export function parseCalcXml(raw: Buffer | string): CalcXmlInput {
   const r = (key: string) => xmlStr(parsed, root, key);
 
   // Legacy clients may omit the decimal in ICD codes (e.g. "73556" → "735.56").
-  // Normalize each code before forwarding to the ODG API.
-  const icdCodes = deduplicate(xmlStrArray(parsed, root, 'icdcodes', 'code')).map(normalizeIcdCode);
+  // keepTrailingDot: legacy PHP passes codes like "R51." unchanged — preserve the dot.
+  const icdCodes = deduplicate(xmlStrArray(parsed, root, 'icdcodes', 'code')).map(
+    (c) => normalizeIcdCode(c, { keepTrailingDot: true }),
+  );
   const cptCodes = deduplicate(xmlStrArray(parsed, root, 'procsummary', 'cpt', 'code'));
   const hcpcsCodes = deduplicate(xmlStrArray(parsed, root, 'procsummary', 'hcpcs', 'code'));
   const procIcdCodes = deduplicate(xmlStrArray(parsed, root, 'procsummary', 'icd', 'code'));
@@ -152,12 +154,16 @@ export function buildCalcRequest(
   input: CalcXmlInput,
   requestedOutput: string,
 ): Record<string, unknown> {
+  // If the given country is not a supported value (US, AU), fall back to the
+  // default country (US) and omit state so the upstream API uses its default.
+  const knownCountry = ['US', 'AU'].includes((input.country ?? '').toUpperCase());
+
   const body: Record<string, unknown> = {
     // TODO/confirm: requestedoutput enum value — 'RasAndRtw' for comorbidity
     requestedoutput: requestedOutput,
     clientId: input.clientid,
-    country: input.country,
-    state: input.state,
+    country: knownCountry ? input.country : 'US',
+    ...(knownCountry ? { state: input.state } : {}),
     fulloutput: input.fulloutput,
     icdCodes: { codes: input.icdCodes },
   };
@@ -281,6 +287,53 @@ export function mapCalcResponse(
   format: LegacyFormat = 'xml',
   service: 'comorbidity' | 'reserve' = 'comorbidity',
 ): LegacyCalculatorResponse {
+  // Compute cfactors ahead of the return so we can derive the set of active alert
+  // colours and use it to gate alertdesc children (only emit a colour in alertdesc
+  // when at least one applied cfactor carries that alert value).
+  const cfactorsResult: Record<string, unknown> | undefined = (() => {
+    if (!data.cfactors) return undefined;
+    const mapped = Object.fromEntries(
+      Object.entries(data.cfactors)
+        .filter(([, v]) => {
+          // Exclude factors where applied === 0 — ODG API returns these when
+          // a factor was evaluated but not applied; legacy never surfaces them.
+          if (v == null || typeof v !== 'object' || Array.isArray(v)) return true;
+          const raw = (v as Record<string, unknown>).applied;
+          const applied = Array.isArray(raw) ? raw[0] : raw;
+          return applied == null || String(applied) !== '0';
+        })
+        .map(([k, v]) => [
+          k,
+          Array.isArray(v)
+            ? (v[0] != null ? String(v[0]) : null)
+            : v != null && typeof v === 'object'
+            ? Object.fromEntries(
+                Object.entries(v as Record<string, unknown>).map(([ik, iv]) => [
+                  ik,
+                  Array.isArray(iv)
+                    ? (ik === 'trigger' ? selectPreferredTrigger(iv) : (iv[0] != null ? String(iv[0]) : null))
+                    : ik === 'applied' ? String(parseInt(String(iv), 10))
+                    : typeof iv === 'number' ? String(iv)
+                    : ik === 'alert' && typeof iv === 'string' ? iv.toLowerCase()
+                    : iv,
+                ]),
+              )
+            : typeof v === 'number' ? String(v) : v,
+        ]),
+    );
+    return Object.keys(mapped).length > 0 ? mapped : undefined;
+  })();
+
+  const activeAlertColors = new Set<string>();
+  if (cfactorsResult) {
+    for (const v of Object.values(cfactorsResult)) {
+      if (v != null && typeof v === 'object' && !Array.isArray(v)) {
+        const alert = (v as Record<string, unknown>).alert;
+        if (typeof alert === 'string' && alert) activeAlertColors.add(alert);
+      }
+    }
+  }
+
   return {
     clientid: input.clientid,
     // TODO/confirm: riskassessment nested fields vs v1.2
@@ -301,20 +354,6 @@ export function mapCalcResponse(
         claimMax:     'cp100',
       }) as Record<string, unknown>;
 
-      // ODG places alert colors in notes.medical.* rather than inside adjustedDuration.*
-      // Extract them and inject into the per-percentile duration objects.
-      const med = (data.notes as Record<string, unknown> | undefined) as
-        { medical?: { bestPractice?: { alert?: string }; claimAverage?: { alert?: string }; claimMax?: { alert?: string } } } | undefined;
-      const alertMap: Record<string, string | undefined> = {
-        bp:    med?.medical?.bestPractice?.alert,
-        cp95:  med?.medical?.claimAverage?.alert,
-        cp100: med?.medical?.claimMax?.alert,
-      };
-      for (const [key, alertVal] of Object.entries(alertMap)) {
-        if (alertVal && renamed[key] && typeof renamed[key] === 'object') {
-          (renamed[key] as Record<string, unknown>).alert = alertVal;
-        }
-      }
       return renamed;
     })(),
     projectedcosts: service === 'reserve' && data.projectedCosts
@@ -325,7 +364,7 @@ export function mapCalcResponse(
         })) as Record<string, unknown>
       : undefined,
     adjustedsummaryguidelines: service === 'reserve' ? undefined : data.adjustedSummaryGuidelines ?? undefined,
-    comprate: data.compRate != null ? formatCurrency(data.compRate) : undefined,
+    comprate: service === 'reserve' && data.compRate != null ? formatCurrency(data.compRate) : undefined,
     icdcodes: input.fulloutput && Array.isArray(data.icdCodes?.icdcode)
       ? (() => {
           // When FNOL codes are present, ODG resolves them to ICDs and includes those
@@ -345,34 +384,13 @@ export function mapCalcResponse(
             stcode: item.stcode ?? null,
             meandurationdays: item.meanDurationDays
               ? {
-                  bp: item.meanDurationDays.bestPractice,
-                  cp95: item.meanDurationDays.claimAverage,
-                  cp100: item.meanDurationDays.claimMax,
+                  bp: item.meanDurationDays.bestPractice ?? 0,
+                  cp95: item.meanDurationDays.claimAverage ?? 0,
+                  cp100: item.meanDurationDays.claimMax ?? 0,
                 }
               : undefined,
           }));
           return format === 'json' ? items : { icdcode: items };
-        })()
-      : undefined,
-    fnolcodes: input.fulloutput && data.fnolCodes
-      ? (() => {
-          // Legacy has a single bp/noi code so fnolcodes is always an object, not an array.
-          // ODG may return fnolCodes as a single-element array — unwrap to the element.
-          // Strip icdcodes from the object — legacy output does not include it.
-          const stripIcdcodes = (item: unknown): unknown => {
-            if (item && typeof item === 'object' && !Array.isArray(item)) {
-              const out: Record<string, unknown> = {};
-              for (const [k, v] of Object.entries(item as Record<string, unknown>)) {
-                if (k.toLowerCase() !== 'icdcodes') out[k] = v;
-              }
-              return out;
-            }
-            return item;
-          };
-          const raw = data.fnolCodes as unknown;
-          // Unwrap single-element array to plain object
-          const obj = Array.isArray(raw) ? raw[0] : raw;
-          return stripIcdcodes(obj) as Record<string, unknown>;
         })()
       : undefined,
     procsummary: (() => {
@@ -409,40 +427,16 @@ export function mapCalcResponse(
       const result = { ...cptcodes, ...icdcodes };
       return Object.keys(result).length > 0 ? result : undefined;
     })(),
-    cfactors: (() => {
-      if (!data.cfactors) return undefined;
-      const mapped = Object.fromEntries(
-        Object.entries(data.cfactors)
-          .filter(([, v]) => {
-            // Exclude factors where applied === 0 — ODG API returns these when
-            // a factor was evaluated but not applied; legacy never surfaces them.
-            if (v == null || typeof v !== 'object' || Array.isArray(v)) return true;
-            const raw = (v as Record<string, unknown>).applied;
-            const applied = Array.isArray(raw) ? raw[0] : raw;
-            return applied == null || String(applied) !== '0';
-          })
-          .map(([k, v]) => [
-          k,
-          Array.isArray(v)
-            ? (v[0] != null ? String(v[0]) : null)
-            : v != null && typeof v === 'object'
-            ? Object.fromEntries(
-                Object.entries(v as Record<string, unknown>).map(([ik, iv]) => [
-                  ik,
-                  Array.isArray(iv)
-                    ? (ik === 'trigger' ? selectPreferredTrigger(iv) : (iv[0] != null ? String(iv[0]) : null))
-                    : ik === 'applied' ? String(parseInt(String(iv), 10))
-                    : typeof iv === 'number' ? String(iv)
-                    : ik === 'alert' && typeof iv === 'string' ? iv.toLowerCase()
-                    : iv,
-                ]),
-              )
-            : typeof v === 'number' ? String(v) : v,
-        ]),
-      );
-      return Object.keys(mapped).length > 0 ? mapped : undefined;
-    })(),
-    alertdesc: data.alertdesc ?? undefined,
+    cfactors: cfactorsResult,
+    alertdesc: data.alertdesc != null
+      ? (() => {
+          const filtered = Object.fromEntries(
+            Object.entries(data.alertdesc as Record<string, unknown>)
+              .filter(([color]) => activeAlertColors.has(color))
+          );
+          return Object.keys(filtered).length > 0 ? filtered : undefined;
+        })()
+      : undefined,
     notes: service === 'reserve' && data.notes
       ? (() => {
           let n = deepRenameKey(data.notes as Record<string, unknown>, 'bestPractice', 'bp');

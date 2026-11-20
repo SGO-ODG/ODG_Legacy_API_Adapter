@@ -120,7 +120,6 @@ export interface LegacyCalculatorResponse {
   adjustedsummaryguidelines?: Record<string, unknown>;
   comprate?: string;
   icdcodes?: { icdcode: LegacyCalcIcdCodeItem[] } | LegacyCalcIcdCodeItem[];
-  fnolcodes?: Record<string, unknown>;
   procsummary?: Record<string, unknown>;
   cfactors?: Record<string, unknown>;
   alertdesc?: Record<string, unknown>;
