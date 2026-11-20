@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ODG Legacy API Adapter — Go-Live Plan</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #172B4D;
+      max-width: 1100px;
+      margin: 40px auto;
+      padding: 0 24px;
+      line-height: 1.6;
+    }
+    h1 { font-size: 26px; border-bottom: 3px solid #0052CC; padding-bottom: 10px; margin-top: 32px; color: #0052CC; }
+    h2 { font-size: 19px; border-bottom: 1px solid #DFE1E6; padding-bottom: 6px; margin-top: 36px; color: #0052CC; }
+    h3 { font-size: 15px; margin-top: 20px; color: #253858; }
+    p  { margin: 10px 0; }
+    ul, ol { margin: 8px 0 8px 24px; }
+    li { margin: 4px 0; }
+    code {
+      background: #F4F5F7;
+      border: 1px solid #DFE1E6;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: "Courier New", monospace;
+      font-size: 11px;
+    }
+    table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 13px; }
+    th {
+      background: #F4F5F7;
+      color: #5E6C84;
+      font-weight: bold;
+      text-align: left;
+      padding: 8px 10px;
+      border: 1px solid #DFE1E6;
+    }
+    td { border: 1px solid #DFE1E6; padding: 7px 10px; vertical-align: top; }
+    tr:nth-child(even) td { background: #FAFBFC; }
+
+    /* Callout boxes */
+    .note    { background: #DEEBFF; border-left: 4px solid #0052CC; padding: 10px 14px; border-radius: 3px; margin: 12px 0; }
+    .warn    { background: #FFFAE6; border-left: 4px solid #FF8B00; padding: 10px 14px; border-radius: 3px; margin: 12px 0; }
+    .danger  { background: #FFEBE6; border-left: 4px solid #DE350B; padding: 10px 14px; border-radius: 3px; margin: 12px 0; }
+    .success { background: #E3FCEF; border-left: 4px solid #00875A; padding: 10px 14px; border-radius: 3px; margin: 12px 0; }
+    .purple  { background: #EAE6FF; border-left: 4px solid #6554C0; padding: 10px 14px; border-radius: 3px; margin: 12px 0; }
+    hr { border: none; border-top: 1px solid #DFE1E6; margin: 36px 0; }
+
+    /* Status badges */
+    .badge { display: inline-block; border-radius: 3px; padding: 2px 10px; font-size: 11px; font-weight: bold; white-space: nowrap; }
+    .b-ready    { background: #E3FCEF; color: #006644; border: 1px solid #57D9A3; }
+    .b-progress { background: #FFFAE6; color: #974F0C; border: 1px solid #FFE380; }
+    .b-blocked  { background: #FFEBE6; color: #BF2600; border: 1px solid #FF5630; }
+    .b-pending  { background: #EAE6FF; color: #403294; border: 1px solid #998DD9; }
+    .b-done     { background: #E3FCEF; color: #006644; border: 1px solid #57D9A3; }
+    .b-open     { background: #DEEBFF; color: #0747A6; border: 1px solid #4C9AFF; }
+    .b-na       { background: #F4F5F7; color: #5E6C84; border: 1px solid #C1C7D0; }
+    .b-critical { background: #FFEBE6; color: #BF2600; border: 1px solid #FF5630; font-size: 12px; padding: 3px 10px; }
+
+    /* Checklist table */
+    .ck td { padding: 6px 10px; }
+    .ck .check-col { width: 28px; text-align: center; font-size: 16px; }
+    .ck .item-col  { }
+    .ck .own-col   { width: 110px; color: #5E6C84; font-size: 12px; }
+    .ck .stat-col  { width: 130px; }
+
+    /* Phase timeline table */
+    .phase-table td { padding: 10px 12px; }
+    .phase-num { font-size: 20px; font-weight: bold; color: #0052CC; text-align: center; width: 36px; }
+    .phase-title { font-weight: bold; color: #172B4D; font-size: 14px; }
+
+    /* Step counter for runbook */
+    .runbook td { padding: 8px 10px; }
+    .runbook .n { font-size: 18px; font-weight: bold; color: #0052CC; text-align: center; width: 32px; }
+
+    /* Summary stats table */
+    .stats-table { border-collapse: collapse; width: 100%; margin: 14px 0; }
+    .stats-table td { border: 1px solid #DFE1E6; padding: 14px 16px; text-align: center; }
+    .stat-num   { font-size: 32px; font-weight: bold; display: block; }
+    .stat-label { font-size: 12px; color: #5E6C84; display: block; margin-top: 2px; }
+  </style>
+</head>
+<body>
+
+<h1>ODG Legacy API Adapter — Go-Live Plan</h1>
+<p style="color:#5E6C84;font-size:13px;">
+  Version 1.0 &nbsp;·&nbsp; Prepared: November 2026 &nbsp;·&nbsp;
+  Branch: <code>feat/fix-comorbidity-findings</code> &nbsp;·&nbsp;
+  Target: Azure App Service
+</p>
+
+<div class="danger">
+  <strong>&#9888; Blocker — Reserve Calculator not yet tested:</strong>
+  Comparison testing and verification for the <strong>Reserve Calculator</strong> adapter endpoint
+  has not been run. No results CSV or discrepancy report exists.
+  <strong>Go-live for the Reserve Calculator is blocked</strong> until testing is completed and
+  the SEAD / Product team sign off on any discrepancies found.
+  All other four endpoints may proceed independently through the go-live process.
+</div>
+
+<hr />
+
+<!-- ════════════════════════════════════════════
+     1. OBJECTIVE
+     ════════════════════════════════════════════ -->
+<h2>1. Objective</h2>
+<p>
+  Cut over legacy insurance company customers from the existing CodeIgniter PHP API
+  to the new <strong>ODG Legacy API Adapter</strong> (Node.js / Express on Azure App Service)
+  without any changes to the customer integration.
+  Customers continue using the same HTTP paths, headers, XML request bodies, and response
+  shapes they currently use. The adapter translates calls to <strong>ODG API v1.2</strong>
+  behind the scenes.
+</p>
+<p>
+  The go-live is phased by endpoint readiness. Endpoints with completed testing and
+  resolved discrepancies go live first. The Reserve Calculator is excluded until
+  testing is complete and results are verified.
+</p>
+
+<table class="stats-table">
+  <tr>
+    <td>
+      <span class="stat-num" style="color:#0052CC;">5</span>
+      <span class="stat-label">Total Endpoints</span>
+    </td>
+    <td>
+      <span class="stat-num" style="color:#006644;">3</span>
+      <span class="stat-label">Ready to Go Live</span>
+    </td>
+    <td>
+      <span class="stat-num" style="color:#974F0C;">1</span>
+      <span class="stat-label">Testing In Progress</span>
+    </td>
+    <td>
+      <span class="stat-num" style="color:#BF2600;">1</span>
+      <span class="stat-label">Blocked — Not Tested</span>
+    </td>
+    <td>
+      <span class="stat-num" style="color:#403294;">0</span>
+      <span class="stat-label">Decommissioned</span>
+    </td>
+  </tr>
+</table>
+
+<hr />
+
+<!-- ════════════════════════════════════════════
+     2. ENDPOINT READINESS
+     ════════════════════════════════════════════ -->
+<h2>2. Endpoint Readiness Status</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Endpoint</th>
+      <th>Legacy Route</th>
+      <th>ODG v1.2 Target</th>
+      <th>Comparison Run</th>
+      <th>Discrepancy Report</th>
+      <th>Decisions Resolved</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>UR Advisor</strong></td>
+      <td><code>GET /restws/uradvisor</code></td>
+      <td><code>/tao/icds</code> · <code>/tao/procedures</code> · <code>/tao/fnol</code></td>
+      <td><span class="badge b-done">&#10003; Done</span></td>
+      <td><span class="badge b-done">&#10003; Done</span></td>
+      <td><span class="badge b-progress">1 Pending SEAD</span></td>
+      <td><span class="badge b-ready">&#9679; READY</span></td>
+    </tr>
+    <tr>
+      <td><strong>Best Practice Guide</strong></td>
+      <td><code>GET /restws/bpguide</code></td>
+      <td><code>/guidelines</code> · <code>/tao/fnol</code></td>
+      <td><span class="badge b-done">&#10003; Done</span></td>
+      <td><span class="badge b-done">&#10003; Done</span></td>
+      <td><span class="badge b-progress">1 Pending SEAD</span></td>
+      <td><span class="badge b-ready">&#9679; READY</span></td>
+    </tr>
+    <tr>
+      <td><strong>One Search</strong></td>
+      <td><code>POST /restws/onesearch</code></td>
+      <td><code>/search</code></td>
+      <td><span class="badge b-done">&#10003; Done</span></td>
+      <td><span class="badge b-done">&#10003; Done</span></td>
+      <td><span class="badge b-progress">2 Pending Product</span></td>
+      <td><span class="badge b-ready">&#9679; READY</span></td>
+    </tr>
+    <tr>
+      <td><strong>Comorbidity Calculator</strong></td>
+      <td><code>POST /calculator/comorbidity</code></td>
+      <td><code>/calculator</code> (RasAndRtw)</td>
+      <td><span class="badge b-done">&#10003; Done</span></td>
+      <td><span class="badge b-done">&#10003; Done</span></td>
+      <td><span class="badge b-progress">Fixes In Progress</span></td>
+      <td><span class="badge b-progress">&#9679; IN PROGRESS</span></td>
+    </tr>
+    <tr style="background:#FFF5F5;">
+      <td><strong>Reserve Calculator</strong></td>
+      <td><code>POST /calculator/reserve</code></td>
+      <td><code>/calculator</code> (RasRtwCosts)</td>
+      <td><span class="badge b-blocked">&#10007; Not Run</span></td>
+      <td><span class="badge b-blocked">&#10007; Not Created</span></td>
+      <td><span class="badge b-blocked">&#10007; Not Started</span></td>
+      <td><span class="badge b-blocked">&#9679; BLOCKED</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="danger">
+  <strong>Reserve Calculator — Blocked:</strong>
+  The <code>legacy-customer-reserve-calculator-results.csv</code> comparison file does not exist.
+  The comparison test script (<code>compare-reserve-calculator.js</code>) has not been run against
+  production legacy customers. No discrepancy report has been generated.
+  <br/><br/>
+  <strong>Required before Reserve Calculator can go live:</strong>
+  <ol style="margin:8px 0 0 20px;">
+    <li>Run <code>node api-tester/tests-scripts/compare-reserve-calculator.js</code> against all legacy customer test cases</li>
+    <li>Generate a discrepancy report from the CSV output</li>
+    <li>Review all findings with the SEAD team and Product</li>
+    <li>Resolve or accept all discrepancies</li>
+    <li>Obtain sign-off from Product before cutover</li>
+  </ol>
+</div>
+
+<div class="note">
+  <strong>Open SEAD / Product items across all endpoints:</strong>
+  Several discrepancy findings remain open pending SEAD team verification or Product decisions.
+  These are documented in the endpoint discrepancy reports in <code>docs/</code>.
+  Endpoints marked READY can go live with these items open — they represent edge-case ICD codes
+  or confirmed acceptable differences, not blocking defects.
+  See <code>docs/sead-review-findings.html</code> for the full findings list.
+</div>
+
+<hr />
+
+<!-- ════════════════════════════════════════════
+     3. PRE-GO-LIVE CHECKLIST
+     ════════════════════════════════════════════ -->
+<h2>3. Pre-Go-Live Checklist</h2>
+
+<h3>A. Infrastructure &amp; Deployment</h3>
+<table class="ck">
+  <thead>
+    <tr><th class="check-col"></th><th class="item-col">Item</th><th class="own-col">Owner</th><th class="stat-col">Status</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>Azure App Service provisioned and Node.js runtime configured (<code>node dist/server.js</code>)</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>Azure PostgreSQL Flexible Server provisioned; SSL enabled (<code>PG_SSL=true</code>)</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>All environment variables set in Azure App Service Application Settings (no plaintext secrets)</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td><code>PG_PASSWORD</code> and <code>ODG_API_CLIENT_SECRET</code> configured as Azure Key Vault references, not plaintext</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td><code>LEGACY_PHP_REFERENCE_ROOT</code> and all <code>MYSQL_*</code> variables omitted from Azure app settings</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>App Service Plan set to B1 or higher (always-on required for token cache warm state)</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>Application Insights connected; telemetry flowing; health check probe configured at <code>/health</code></td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>Private endpoint or VNet integration configured for App Service ↔ PostgreSQL connectivity</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>TypeScript compiled: <code>npm run build</code> produces <code>dist/</code> without errors</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>Database tables created: <code>node data/01-create-db.js</code> run on production PostgreSQL</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>B. Security &amp; Credentials</h3>
+<table class="ck">
+  <thead>
+    <tr><th class="check-col"></th><th class="item-col">Item</th><th class="own-col">Owner</th><th class="stat-col">Status</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>ODG API OAuth credentials (<code>ODG_API_CLIENT_ID</code>, <code>ODG_API_CLIENT_SECRET</code>) confirmed valid and stored in Key Vault</td>
+      <td>SEAD Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>OAuth token URL, audience, and scopes confirmed and set in app settings</td>
+      <td>SEAD Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td><code>ODG_DEBUG_PAYLOADS=N</code> confirmed set in production — verbose logging disabled</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>No <code>.env</code> file or PHP credentials committed to or present in deployment package</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>All legacy customer <code>X-ODG-KEY</code> values loaded into <code>companymaster</code> table on production PostgreSQL</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>All <code>companywebservice</code> subscription rows loaded with correct service codes and date ranges</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>C. Testing &amp; Verification (per endpoint)</h3>
+<table class="ck">
+  <thead>
+    <tr><th class="check-col"></th><th class="item-col">Item</th><th class="own-col">Owner</th><th class="stat-col">Status</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="check-col">&#10003;</td>
+      <td><strong>UR Advisor</strong> — comparison tests run; discrepancy report generated and reviewed</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-done">Done</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#10003;</td>
+      <td><strong>Best Practice Guide</strong> — comparison tests run; discrepancy report generated and reviewed</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-done">Done</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#10003;</td>
+      <td><strong>One Search</strong> — comparison tests run; discrepancy report generated and reviewed</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-done">Done</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td><strong>Comorbidity Calculator</strong> — active fixes merged (<code>feat/fix-comorbidity-findings</code>); re-run comparison to confirm all fixes pass</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-progress">In Progress</span></td>
+    </tr>
+    <tr style="background:#FFF5F5;">
+      <td class="check-col" style="color:#DE350B;">&#9888;</td>
+      <td>
+        <strong>Reserve Calculator</strong> — comparison tests NOT yet run.
+        Required steps:
+        <ol style="margin:6px 0 0 18px;">
+          <li>Run <code>compare-reserve-calculator.js</code> against all legacy customer test inputs</li>
+          <li>Generate discrepancy report from results CSV</li>
+          <li>Review all findings with SEAD team</li>
+          <li>Resolve or accept all items; obtain Product sign-off</li>
+        </ol>
+      </td>
+      <td>ODG API Team<br/>+ SEAD</td>
+      <td><span class="badge b-blocked">BLOCKED</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>End-to-end smoke test against <strong>production</strong> ODG API v1.2 endpoint (not UAT/sandbox) with one real customer key</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>Verify XML response format matches legacy exactly for each endpoint (element names, ordering, wrapper elements)</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>Verify JSON format response (<code>/format/json</code>) for each endpoint matches legacy JSON output</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>Verify <code>USAGE_LOGGING_ENABLED=Y</code> and usage rows are written to <code>webserviceusage</code> for each endpoint</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>D. SEAD Team &amp; Product Sign-off</h3>
+<table class="ck">
+  <thead>
+    <tr><th class="check-col"></th><th class="item-col">Item</th><th class="own-col">Owner</th><th class="stat-col">Status</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>SEAD team reviewed and signed off on UR Advisor discrepancy report (AU content gap item)</td>
+      <td>SEAD Team</td>
+      <td><span class="badge b-open">In Review</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>SEAD team reviewed and signed off on Best Practice Guide discrepancy report (activity modifier item)</td>
+      <td>SEAD Team</td>
+      <td><span class="badge b-open">In Review</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>Product reviewed and confirmed One Search country scope and result-count cap decisions</td>
+      <td>Product</td>
+      <td><span class="badge b-open">In Review</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>Product reviewed and confirmed Comorbidity Calculator discrepancy findings</td>
+      <td>Product</td>
+      <td><span class="badge b-open">In Review</span></td>
+    </tr>
+    <tr style="background:#FFF5F5;">
+      <td class="check-col" style="color:#DE350B;">&#9888;</td>
+      <td><strong>Reserve Calculator</strong> — SEAD &amp; Product sign-off cannot begin until comparison testing is complete</td>
+      <td>SEAD / Product</td>
+      <td><span class="badge b-blocked">BLOCKED</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>All findings from <code>docs/sead-review-findings.html</code> confirmed resolved or accepted with rationale documented</td>
+      <td>SEAD / Product</td>
+      <td><span class="badge b-open">In Review</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>E. Customer Communication</h3>
+<table class="ck">
+  <thead>
+    <tr><th class="check-col"></th><th class="item-col">Item</th><th class="own-col">Owner</th><th class="stat-col">Status</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>Confirm that no customer integration changes are required (same hostname, paths, headers, and response format)</td>
+      <td>Product</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>Customer account managers notified of planned cutover date per customer</td>
+      <td>Product</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>Customer support team briefed on adapter behavior differences to expect (e.g. Elasticsearch vs SQL result sets in OneSearch)</td>
+      <td>Product</td>
+      <td><span class="badge b-pending">Pending</span></td>
+    </tr>
+    <tr>
+      <td class="check-col">&#9744;</td>
+      <td>Maintenance window communicated per customer (if applicable)</td>
+      <td>Product</td>
+      <td><span class="badge b-na">If applicable</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<!-- ════════════════════════════════════════════
+     4. GO-LIVE PHASES
+     ════════════════════════════════════════════ -->
+<h2>4. Go-Live Phases</h2>
+
+<table class="phase-table">
+  <thead>
+    <tr><th style="width:50px;">Phase</th><th>Name</th><th>Scope</th><th>Gate Condition</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="phase-num">1</td>
+      <td>
+        <div class="phase-title">Infrastructure &amp; Deployment</div>
+        Deploy adapter to Azure; configure all credentials and environment variables
+      </td>
+      <td>Azure App Service, PostgreSQL, Key Vault, App Insights; production ODG API credentials</td>
+      <td>
+        <code>GET /health</code> returns <code>{ "status": "ok" }</code><br/>
+        PostgreSQL tables created and seeded<br/>
+        OAuth token fetch succeeds
+      </td>
+      <td><span class="badge b-pending">Not Started</span></td>
+    </tr>
+    <tr>
+      <td class="phase-num">2</td>
+      <td>
+        <div class="phase-title">Parallel Run — Canary Customer</div>
+        Route one low-risk internal or pilot customer to the adapter while legacy PHP remains live
+      </td>
+      <td>Single customer, all 4 ready endpoints (UR Advisor, BpGuide, OneSearch, Comorbidity)</td>
+      <td>
+        Zero unexpected errors in Application Insights<br/>
+        Usage log rows appearing in <code>webserviceusage</code><br/>
+        Customer confirms responses are correct
+      </td>
+      <td><span class="badge b-pending">Not Started</span></td>
+    </tr>
+    <tr>
+      <td class="phase-num">3</td>
+      <td>
+        <div class="phase-title">Phased Customer Cutover — Endpoints 1–4</div>
+        Move remaining legacy customers to the adapter for UR Advisor, BpGuide, OneSearch, and Comorbidity
+      </td>
+      <td>All subscribed customers for the 4 ready endpoints; Reserve Calculator excluded</td>
+      <td>
+        Phase 2 canary period complete with no blocking issues<br/>
+        SEAD / Product sign-off obtained for each endpoint<br/>
+        Comorbidity fixes merged and re-verified
+      </td>
+      <td><span class="badge b-pending">Not Started</span></td>
+    </tr>
+    <tr style="background:#FFF5F5;">
+      <td class="phase-num" style="color:#BF2600;">4</td>
+      <td>
+        <div class="phase-title">Reserve Calculator — Testing &amp; Cutover</div>
+        <span style="color:#BF2600;">&#9888; Blocked until comparison testing is complete</span>
+      </td>
+      <td>All customers subscribed to Reserve Calculator endpoint</td>
+      <td>
+        <strong style="color:#BF2600;">Comparison tests run and results verified</strong><br/>
+        Discrepancy report reviewed by SEAD and Product<br/>
+        All findings resolved or accepted<br/>
+        Product sign-off obtained
+      </td>
+      <td><span class="badge b-blocked">BLOCKED</span></td>
+    </tr>
+    <tr>
+      <td class="phase-num">5</td>
+      <td>
+        <div class="phase-title">Legacy PHP Retirement</div>
+        Decommission the CodeIgniter PHP API after all customers are on the adapter and stability confirmed
+      </td>
+      <td>Legacy PHP application, DNS/routing config</td>
+      <td>
+        All customers on adapter for minimum 4 weeks with no regression<br/>
+        No open support tickets related to adapter<br/>
+        Reserve Calculator Phase 4 complete<br/>
+        Formal sign-off from Product and SEAD
+      </td>
+      <td><span class="badge b-pending">Not Started</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="warn">
+  <strong>Phasing note:</strong> Phases 3 and 4 can run sequentially (most customers) or in parallel
+  per customer account depending on their subscribed services. A customer who only uses UR Advisor
+  can be moved during Phase 3 regardless of Reserve Calculator status.
+  A customer who uses Reserve Calculator must wait for Phase 4.
+</div>
+
+<hr />
+
+<!-- ════════════════════════════════════════════
+     5. DAY-OF CUTOVER RUNBOOK
+     ════════════════════════════════════════════ -->
+<h2>5. Day-of Cutover Runbook</h2>
+<p>Perform these steps in order on cutover day for each customer being moved.</p>
+
+<table class="runbook">
+  <thead>
+    <tr><th style="width:40px;">#</th><th>Step</th><th style="width:130px;">Owner</th><th style="width:110px;">Verification</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="n">1</td>
+      <td>
+        <strong>Confirm adapter is healthy</strong><br/>
+        Call <code>GET /health</code> on the adapter and confirm <code>{ "status": "ok" }</code>.<br/>
+        Check Application Insights — no active alerts or error spikes.
+      </td>
+      <td>ODG API Team</td>
+      <td>200 OK response</td>
+    </tr>
+    <tr>
+      <td class="n">2</td>
+      <td>
+        <strong>Verify customer account in database</strong><br/>
+        Confirm the customer's <code>X-ODG-KEY</code> is in <code>companymaster</code> with <code>disabled='N'</code>,
+        and all subscribed services are in <code>companywebservice</code> with valid date ranges.
+      </td>
+      <td>ODG API Team</td>
+      <td>DB row confirmed</td>
+    </tr>
+    <tr>
+      <td class="n">3</td>
+      <td>
+        <strong>Send a test request via the adapter for the customer</strong><br/>
+        Use a known test ICD code or search query. Confirm the adapter responds correctly
+        (200 with expected XML/JSON structure). Log the response for the record.
+      </td>
+      <td>ODG API Team</td>
+      <td>Response matches expected</td>
+    </tr>
+    <tr>
+      <td class="n">4</td>
+      <td>
+        <strong>Switch DNS / routing to point customer traffic at the adapter</strong><br/>
+        Update the gateway, load balancer, or customer-specific routing rule to direct
+        the customer's API calls to the Azure App Service hostname instead of the legacy PHP server.
+      </td>
+      <td>ODG API Team / Infra</td>
+      <td>Routing updated</td>
+    </tr>
+    <tr>
+      <td class="n">5</td>
+      <td>
+        <strong>Monitor for 15–30 minutes post-cutover</strong><br/>
+        Watch Application Insights live metrics for error rate, response time, and 4xx/5xx counts.
+        Check <code>webserviceusage</code> for new rows from the customer's <code>companyCode</code>
+        to confirm requests are reaching the adapter.
+      </td>
+      <td>ODG API Team</td>
+      <td>No error spike; usage rows present</td>
+    </tr>
+    <tr>
+      <td class="n">6</td>
+      <td>
+        <strong>Customer confirmation</strong><br/>
+        Notify the customer account manager that the cutover is complete.
+        Request confirmation from the customer that their integration is working as expected.
+      </td>
+      <td>Product</td>
+      <td>Customer confirms OK</td>
+    </tr>
+    <tr>
+      <td class="n">7</td>
+      <td>
+        <strong>Record completion</strong><br/>
+        Update the go-live tracking document with: customer name, cutover timestamp,
+        confirming engineer, and any observations.
+      </td>
+      <td>ODG API Team</td>
+      <td>Log entry recorded</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="warn">
+  <strong>Reserve Calculator customers:</strong> Do not perform step 4 for any customer whose
+  subscribed services include Reserve Calculator until Phase 4 is complete and cleared.
+  Move those customers only after Reserve Calculator testing and sign-off.
+</div>
+
+<hr />
+
+<!-- ════════════════════════════════════════════
+     6. ROLLBACK PLAN
+     ════════════════════════════════════════════ -->
+<h2>6. Rollback Plan</h2>
+
+<p>
+  The legacy PHP API remains running throughout Phases 1–4.
+  Rollback is a DNS/routing change only — no code deployment required.
+  The adapter and legacy PHP API can run in parallel indefinitely.
+</p>
+
+<table>
+  <thead>
+    <tr><th>Trigger</th><th>Rollback Action</th><th>Owner</th><th>Time to Execute</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Adapter returning unexpected errors (5xx) for a customer</td>
+      <td>Revert DNS / routing rule to point customer traffic back to legacy PHP server</td>
+      <td>ODG API Team / Infra</td>
+      <td>&lt; 5 minutes</td>
+    </tr>
+    <tr>
+      <td>Customer reports incorrect response content</td>
+      <td>Revert routing for that customer; investigate discrepancy using Application Insights + usage log</td>
+      <td>ODG API Team</td>
+      <td>&lt; 10 minutes</td>
+    </tr>
+    <tr>
+      <td>ODG API v1.2 upstream outage</td>
+      <td>Revert all customers to legacy PHP (which uses different upstream data source)</td>
+      <td>ODG API Team</td>
+      <td>&lt; 15 minutes</td>
+    </tr>
+    <tr>
+      <td>OAuth token refresh failure (all requests failing auth)</td>
+      <td>Revert routing; check Key Vault secret rotation or OAuth server availability</td>
+      <td>ODG API Team</td>
+      <td>&lt; 10 minutes</td>
+    </tr>
+    <tr>
+      <td>PostgreSQL connectivity failure</td>
+      <td>Revert routing; check VNet / private endpoint configuration</td>
+      <td>ODG API Team / Infra</td>
+      <td>&lt; 10 minutes</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="success">
+  <strong>Rollback is low-risk:</strong> Because the legacy PHP API continues to run on the existing
+  infrastructure throughout the cutover process, rollback for any customer is a single routing change.
+  No data migration is involved. No customer data is stored in the adapter — only usage logs.
+</div>
+
+<div class="warn">
+  <strong>Do not decommission the legacy PHP API</strong> (Phase 5) until all customers are on the
+  adapter and have been stable for a minimum of 4 weeks. Premature decommission removes the rollback option.
+</div>
+
+<hr />
+
+<!-- ════════════════════════════════════════════
+     7. POST-GO-LIVE VERIFICATION
+     ════════════════════════════════════════════ -->
+<h2>7. Post-Go-Live Verification</h2>
+
+<h3>Immediate (within 24 hours of each customer cutover)</h3>
+<table>
+  <thead>
+    <tr><th>Check</th><th>How to verify</th><th>Pass condition</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>No unexpected 5xx errors</td>
+      <td>Application Insights → Failures blade → check exception count</td>
+      <td>Error rate &lt; baseline; no new exception types</td>
+    </tr>
+    <tr>
+      <td>Requests reaching the adapter</td>
+      <td>Query <code>webserviceusage</code>: <code>SELECT * FROM webserviceusage WHERE companyCode = 'X' ORDER BY requestReceived DESC LIMIT 20</code></td>
+      <td>Rows present with correct companyCode and webserviceCode</td>
+    </tr>
+    <tr>
+      <td>Response time acceptable</td>
+      <td>Application Insights → Performance blade → check average response time per endpoint</td>
+      <td>P95 response time within agreed SLA (typically &lt; 5 s for clinical endpoints)</td>
+    </tr>
+    <tr>
+      <td>OAuth token caching working</td>
+      <td>Application Insights → check for repeated <code>POST /token</code> calls; should be infrequent (once per token lifetime)</td>
+      <td>Token fetched once; reused for subsequent requests within lifetime</td>
+    </tr>
+    <tr>
+      <td>Usage logging writing correctly</td>
+      <td>Query <code>webserviceusage</code> for rows; verify all 11 fields are populated as expected</td>
+      <td>All fields populated; no nulls in companyCode, webserviceCode, resultCode, serverResponseTime</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Ongoing (first 4 weeks)</h3>
+<ul>
+  <li>Daily review of Application Insights error rate and response time trends</li>
+  <li>Weekly review of <code>webserviceusage</code> query volume per customer and per service</li>
+  <li>Monitor for any customer-reported discrepancies via support channels</li>
+  <li>Track open SEAD / Product items — confirm resolution timeline</li>
+  <li>Confirm no unexpected ICD code normalization issues emerge in production data</li>
+</ul>
+
+<hr />
+
+<!-- ════════════════════════════════════════════
+     8. OPEN ITEMS & BLOCKERS
+     ════════════════════════════════════════════ -->
+<h2>8. Open Items &amp; Blockers</h2>
+
+<table>
+  <thead>
+    <tr><th>#</th><th>Item</th><th>Endpoint</th><th>Owner</th><th>Blocks Go-Live?</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+    <tr style="background:#FFF5F5;">
+      <td><strong>1</strong></td>
+      <td>
+        <strong>Reserve Calculator — comparison testing not run</strong><br/>
+        No results CSV; no discrepancy report; no SEAD / Product review completed.
+        Cannot go live until testing is run, discrepancies reviewed, and sign-off obtained.
+      </td>
+      <td>Reserve Calculator</td>
+      <td>ODG API Team<br/>+ SEAD + Product</td>
+      <td><span class="badge b-blocked">YES — Blocks Phase 4</span></td>
+      <td><span class="badge b-blocked">BLOCKED</span></td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>
+        <strong>Comorbidity Calculator fixes pending merge</strong><br/>
+        Active code fixes on branch <code>feat/fix-comorbidity-findings</code>.
+        Comparison tests need to be re-run after merge to confirm all fixes pass before cutover.
+      </td>
+      <td>Comorbidity</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-progress">YES — Blocks Phase 3 for Comorbidity</span></td>
+      <td><span class="badge b-progress">In Progress</span></td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>
+        <strong>UR Advisor — AU content gap (C49.21 / C49.22)</strong><br/>
+        Legacy returns results for AU-specific ICD codes; adapter returns 404.
+        SEAD team to confirm whether ODG v1.2 AU content is published or will be published before cutover.
+      </td>
+      <td>UR Advisor</td>
+      <td>SEAD Team</td>
+      <td><span class="badge b-progress">Only if AU customers affected</span></td>
+      <td><span class="badge b-open">Pending SEAD</span></td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>
+        <strong>Best Practice Guide — activity modifier content gap</strong><br/>
+        G90.5 / M79.629 / M79.64 return additional <code>activitymod</code> entries via adapter not present in legacy.
+        SEAD team to confirm whether this is a publishing gap or expected ODG v1.2 content expansion.
+      </td>
+      <td>Best Practice Guide</td>
+      <td>SEAD Team</td>
+      <td><span class="badge b-na">Does not block</span></td>
+      <td><span class="badge b-open">Pending SEAD</span></td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>
+        <strong>One Search — AU country scope default</strong><br/>
+        Test MLC-TEST-33 returns results for AU-specific ICD codes via legacy but not via adapter.
+        Product to decide: should adapter default to US+AU scope, or stay US-only?
+      </td>
+      <td>One Search</td>
+      <td>Product</td>
+      <td><span class="badge b-na">Does not block</span></td>
+      <td><span class="badge b-open">Pending Product</span></td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>
+        <strong>One Search — result count cap (~500 results)</strong><br/>
+        ODG API caps results at ~500; legacy SQL returned unbounded sets.
+        Product has accepted this by design but formal confirmation for record is needed.
+      </td>
+      <td>One Search</td>
+      <td>Product</td>
+      <td><span class="badge b-na">Does not block</span></td>
+      <td><span class="badge b-open">Pending Product</span></td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td>
+        <strong>Multi-instance token cache</strong><br/>
+        In-memory token cache works for a single App Service instance.
+        If the App Service plan scales out to multiple instances, each instance will fetch its own token.
+        Replace with Azure Cache for Redis if scale-out is planned before go-live.
+      </td>
+      <td>All</td>
+      <td>ODG API Team</td>
+      <td><span class="badge b-na">Only if multi-instance</span></td>
+      <td><span class="badge b-open">Decision Needed</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<!-- ════════════════════════════════════════════
+     9. CONTACTS & OWNERS
+     ════════════════════════════════════════════ -->
+<h2>9. Contacts &amp; Owners</h2>
+
+<table>
+  <thead>
+    <tr><th>Role</th><th>Responsibility in this plan</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>ODG API Team</strong></td>
+      <td>
+        Infrastructure deployment, database setup, comparison test runs,
+        code fixes and merges, day-of cutover execution, post-go-live monitoring.
+        Reserve Calculator testing owner.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>SEAD Team</strong></td>
+      <td>
+        Review discrepancy reports for all endpoints.
+        Confirm or resolve content publishing gaps (AU ICD codes, activity modifier extras).
+        Provide OAuth credentials and confirm ODG API v1.2 readiness.
+        Sign off on endpoint readiness before cutover.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Product</strong></td>
+      <td>
+        Confirm accepted behavioral differences (result count cap, country scope).
+        Customer communication and cutover timing approval.
+        Final sign-off for each endpoint go-live and for legacy PHP retirement.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Customer Account Managers</strong></td>
+      <td>
+        Communicate cutover timeline to customers.
+        Collect customer confirmation after cutover.
+        Escalation point for any customer-reported issues post-cutover.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Infrastructure / Infra Team</strong></td>
+      <td>
+        DNS and routing changes for each customer cutover.
+        Azure resource provisioning (if separate from ODG API Team).
+        Rollback execution if needed.
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<!-- ════════════════════════════════════════════
+     10. REFERENCE DOCUMENTS
+     ════════════════════════════════════════════ -->
+<h2>10. Reference Documents</h2>
+
+<table>
+  <thead>
+    <tr><th>Document</th><th>Location</th><th>Purpose</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Architecture &amp; Design</td>
+      <td><code>docs/architecture-diagram.html</code></td>
+      <td>Full component architecture, request pipeline, database schema, Azure deployment</td>
+    </tr>
+    <tr>
+      <td>Sequence Diagram</td>
+      <td><code>docs/sequence-diagram.html</code></td>
+      <td>Request flow, auth failure, 401 retry, endpoint-specific ODG API targets</td>
+    </tr>
+    <tr>
+      <td>Authentication &amp; Logging Design</td>
+      <td><code>docs/authentication-design.html</code></td>
+      <td>X-ODG-KEY auth flow, OAuth credential isolation, usage logging fields</td>
+    </tr>
+    <tr>
+      <td>SEAD Review Findings</td>
+      <td><code>docs/sead-review-findings.html</code></td>
+      <td>All open code findings requiring SEAD / Product review before go-live</td>
+    </tr>
+    <tr>
+      <td>UR Advisor Discrepancy Report</td>
+      <td><code>docs/uradvisor-discrepancy-report.html</code></td>
+      <td>Comparison test findings: 1 PRODUCT ACCEPTED, 1 PENDING SEAD</td>
+    </tr>
+    <tr>
+      <td>Best Practice Guide Discrepancy Report</td>
+      <td><code>docs/bpguide-discrepancy-report.html</code></td>
+      <td>Comparison test findings: 2 PRODUCT ACCEPTED, 1 PENDING SEAD</td>
+    </tr>
+    <tr>
+      <td>One Search Discrepancy Report</td>
+      <td><code>docs/onesearch-discrepancy-report.html</code></td>
+      <td>Comparison test findings: 1 PRODUCT ACCEPTED, 1 PENDING PRODUCT DECISION, 1 PENDING PRODUCT CONFIRMATION</td>
+    </tr>
+    <tr>
+      <td>Comorbidity Calculator Discrepancy Report</td>
+      <td><code>docs/comorbidity-discrepancy-report.html</code></td>
+      <td>Comparison test findings: fixes in progress on <code>feat/fix-comorbidity-findings</code></td>
+    </tr>
+    <tr style="background:#FFF5F5;">
+      <td><strong>Reserve Calculator Discrepancy Report</strong></td>
+      <td><em style="color:#BF2600;">Does not exist yet</em></td>
+      <td><strong style="color:#BF2600;">&#9888; Blocked — comparison tests not run. Must be created before Reserve Calculator go-live.</strong></td>
+    </tr>
+    <tr>
+      <td>Legacy API Contract</td>
+      <td><code>legacy-php-api-contract.md</code></td>
+      <td>Source-derived legacy input/output contract for all 5 endpoints</td>
+    </tr>
+    <tr>
+      <td>Legacy-to-ODG v1.2 Mapping Review</td>
+      <td><code>legacy-to-odg-v12-mapping-review.md</code></td>
+      <td>Field mapping decisions and confirmed rules between legacy and ODG API v1.2</td>
+    </tr>
+  </tbody>
+</table>
+
+</body>
+</html>

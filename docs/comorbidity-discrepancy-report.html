@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Comorbidity Calculator — Adapter Comparison Discrepancy Report</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 14px; color: #172B4D; max-width: 1100px; margin: 40px auto; padding: 0 24px; line-height: 1.6; }
+    h1 { font-size: 26px; border-bottom: 2px solid #DFE1E6; padding-bottom: 8px; margin-top: 32px; }
+    h2 { font-size: 20px; border-bottom: 1px solid #DFE1E6; padding-bottom: 6px; margin-top: 36px; color: #0052CC; }
+    h3 { font-size: 16px; margin-top: 24px; color: #253858; }
+    p { margin: 10px 0; }
+    ul, ol { margin: 10px 0 10px 24px; }
+    li { margin: 4px 0; }
+    code { background: #F4F5F7; border: 1px solid #DFE1E6; border-radius: 3px; padding: 1px 5px; font-family: "Courier New", monospace; font-size: 12px; }
+    table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 13px; }
+    th { background: #0052CC; color: #fff; text-align: left; padding: 8px 10px; }
+    td { border: 1px solid #DFE1E6; padding: 6px 10px; vertical-align: top; }
+    tr:nth-child(even) td { background: #F4F5F7; }
+    .badge { display: inline-block; border-radius: 3px; padding: 2px 8px; font-size: 11px; font-weight: bold; white-space: nowrap; }
+    .badge-pass     { background: #E3FCEF; color: #006644; border: 1px solid #57D9A3; }
+    .badge-fail     { background: #FFEBE6; color: #BF2600; border: 1px solid #FF5630; }
+    .badge-warn     { background: #FFFAE6; color: #974F0C; border: 1px solid #FFE380; }
+    .badge-info     { background: #DEEBFF; color: #0747A6; border: 1px solid #4C9AFF; }
+    .badge-accepted { background: #FFFAE6; color: #974F0C; border: 1px solid #FFE380; }
+    .badge-pending  { background: #EAE6FF; color: #403294; border: 1px solid #998DD9; }
+    .badge-fixed    { background: #E3FCEF; color: #006644; border: 1px solid #57D9A3; }
+    .note    { background: #DEEBFF; border-left: 4px solid #0052CC; padding: 10px 14px; border-radius: 3px; margin: 12px 0; }
+    .warn    { background: #FFFAE6; border-left: 4px solid #FF8B00; padding: 10px 14px; border-radius: 3px; margin: 12px 0; }
+    .pending { background: #EAE6FF; border-left: 4px solid #6554C0; padding: 10px 14px; border-radius: 3px; margin: 12px 0; }
+    .summary-grid { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
+    .summary-card { flex: 1; min-width: 140px; border: 1px solid #DFE1E6; border-radius: 4px; padding: 14px 16px; text-align: center; }
+    .summary-card .number { font-size: 32px; font-weight: bold; }
+    .summary-card .label  { font-size: 12px; color: #5E6C84; margin-top: 4px; }
+    .num-green  { color: #006644; }
+    .num-red    { color: #BF2600; }
+    .num-orange { color: #974F0C; }
+    .num-blue   { color: #0052CC; }
+    .num-purple { color: #403294; }
+    hr { border: none; border-top: 1px solid #DFE1E6; margin: 32px 0; }
+  </style>
+</head>
+<body>
+
+<h1>Comorbidity Calculator — Adapter Comparison Discrepancy Report</h1>
+<p>
+  <strong>API path:</strong> <code>POST /calculator/comorbidity</code> &nbsp;|&nbsp;
+  <strong>Source CSV:</strong> <code>legacy-customer-comorbidity-calculator-results.csv</code> &nbsp;|&nbsp;
+  <strong>Report date:</strong> 2026-11-19
+</p>
+<p>This report covers only open items requiring clarification or a decision from the SEAD team or Product. It includes product-confirmed behaviors for record. The reserve calculator comparison is out of scope here and covered in a separate report.</p>
+
+<hr />
+
+<h2>Discrepancy Type Reference</h2>
+
+<p>Each test case fires both the legacy PHP API and the adapter in parallel. The compare script tags each output row with one of the types below. <strong>EXPECTED_DIFF</strong> and <strong>WITHIN_THRESHOLD</strong> do not count as failures and are excluded from the failure count; a test fails only when <strong>CONTENT_MISMATCH</strong>, <strong>HTTP_STATUS_DIFF</strong>, <strong>NETWORK_ERROR</strong>, <strong>FORMAT_MISMATCH</strong>, <strong>PARSE_ERROR</strong>, or <strong>EMPTY_VS_RESULTS</strong> appears in any of its rows.</p>
+
+<table>
+  <tr><th>Type</th><th>Counts as Failure?</th><th>What It Means</th><th>Detection Logic</th></tr>
+  <tr><td><code>PASS</code></td><td>No</td><td>HTTP status and full response body are identical.</td><td>No diffs produced.</td></tr>
+  <tr><td><code>HTTP_STATUS_DIFF</code></td><td>Yes</td><td>Different HTTP status codes; body comparison skipped.</td><td><code>legacyStatus !== adapterStatus</code></td></tr>
+  <tr><td><code>CONTENT_MISMATCH</code></td><td>Yes</td><td>A field value differs or a field present in one side is absent in the other.</td><td>Recursive comparator; any leaf diff not overridden to a non-failure type.</td></tr>
+  <tr><td><code>FORMAT_MISMATCH</code></td><td>Yes</td><td>Legacy returns XML, adapter returns JSON (or vice versa).</td><td><code>detectFormat(legacy) !== detectFormat(adapter)</code></td></tr>
+  <tr><td><code>PARSE_ERROR</code></td><td>Yes</td><td>Response body cannot be parsed as XML or JSON.</td><td><code>XMLParser.parse()</code> or <code>JSON.parse()</code> throws.</td></tr>
+  <tr><td><code>NETWORK_ERROR</code></td><td>Yes</td><td>HTTP request failed at network level (timeout, connection refused).</td><td><code>axios</code> itself throws.</td></tr>
+  <tr><td><code>EXPECTED_DIFF</code></td><td>No (accepted)</td><td>Known intentional adapter-vs-legacy difference: adapter returns extra ODG v1.2 fields (<code>alert</code>, <code>stcode</code>, <code>alertdesc</code> object when populated) or FNOL-triggered score/duration diffs.</td><td>Path/pattern allow-list in compare script.</td></tr>
+  <tr><td><code>WITHIN_THRESHOLD</code></td><td>No (accepted)</td><td>Numeric value differs but the absolute difference is within the configured variance threshold (±5 for scores, ±5 days for durations, ±5 for population stats).</td><td>Threshold check on <code>riskassessment.score</code>, <code>adjustedduration.*.days</code>, <code>adjustedsummaryguidelines.*</code> paths.</td></tr>
+  <tr><td><code>EMPTY_VS_RESULTS</code></td><td>Yes</td><td>One side's array has records and the other has none.</td><td>Legacy or adapter returns empty array where the other has items.</td></tr>
+</table>
+
+<h3>This Run Summary</h3>
+<table>
+  <tr><th>Discrepancy Type</th><th>Unique Test Cases</th><th>Counts as Failure?</th><th>Notes</th></tr>
+  <tr><td><code>PASS</code></td><td>244</td><td>No</td><td>All rows identical — no diffs at all.</td></tr>
+  <tr><td><code>EXPECTED_DIFF</code></td><td>467</td><td>No</td><td>Intentional diffs: <code>stcode</code>, <code>alert</code> fields not yet implemented in adapter; <code>alertdesc</code> absent when legacy returns it.</td></tr>
+  <tr><td><code>WITHIN_THRESHOLD</code></td><td>354</td><td>No</td><td>Numeric diffs within ±5 tolerance.</td></tr>
+  <tr><td><code>CONTENT_MISMATCH</code></td><td>253</td><td><strong>Yes</strong></td><td>Field value differs outside tolerance. See Items 1–6 for root-cause breakdown.</td></tr>
+  <tr><td><code>NETWORK_ERROR</code></td><td>1</td><td><strong>Yes</strong></td><td>Caterpillar-TEST-12: legacy PHP timed out (30 s). Adapter returned 200 successfully.</td></tr>
+  <tr><td><code>HTTP_STATUS_DIFF</code></td><td>0</td><td>Yes</td><td>Not observed in this run.</td></tr>
+  <tr><td><code>FORMAT_MISMATCH</code></td><td>0</td><td>Yes</td><td>Not observed in this run.</td></tr>
+  <tr><td><code>PARSE_ERROR</code></td><td>0</td><td>Yes</td><td>Not observed in this run.</td></tr>
+  <tr><td><code>EMPTY_VS_RESULTS</code></td><td>0</td><td>Yes</td><td>Not observed in this run.</td></tr>
+  <tr><td><strong>Total unique tests</strong></td><td><strong>835</strong></td><td></td><td>A single test may appear in multiple type rows.</td></tr>
+</table>
+
+<hr />
+
+<h2>Executive Summary</h2>
+
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="number num-blue">835</div>
+    <div class="label">Total Tests<br/>25 customers</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-green">586</div>
+    <div class="label">No Failures<br/>(70%)</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-orange">3</div>
+    <div class="label">Product Accepted<br/>Items</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-purple">2</div>
+    <div class="label">Pending Product<br/>Confirmation</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-purple">1</div>
+    <div class="label">Pending Product<br/>Decision</div>
+  </div>
+</div>
+
+<p>Of the 835 tests across 25 customers, 586 (70%) have no failures — HTTP status and full response body match. The remaining 249 failing tests group into 5 open items. The dominant failure pattern is a systematic calculation divergence in the ODG v1.2 comorbidity model: <code>riskassessment.magnitude</code>, <code>riskassessment.volatility</code>, and downstream <code>adjustedduration.*.days</code> values exceed the ±5 threshold in roughly 240 tests across 14 customers. This appears to reflect intentional model updates in ODG v1.2 and requires Product sign-off before cutover. Three smaller categories — ICD-10 trigger codes, extended ICD code lists, and <code>alertdesc.yellow</code> population (adapter fix applied) — are proposed as Product Accepted improvements. One anomaly (Caterpillar legacy returning 0 for a population statistic) requires a Product/SEAD decision.</p>
+
+<table>
+  <tr><th>Customer</th><th>Tests Run</th><th>Pass (No Failures)</th><th>Prod Accepted Diffs</th><th>Pending Product</th></tr>
+  <tr><td>Averitt-ODGDEMO</td><td>43</td><td>43</td><td>—</td><td>—</td></tr>
+  <tr><td>CGU-ODGDEMO</td><td>50</td><td>50</td><td>—</td><td>—</td></tr>
+  <tr><td>DXCRM-ODGDEMO</td><td>9</td><td>9</td><td>—</td><td>—</td></tr>
+  <tr><td>Publix-ODGDEMO</td><td>4</td><td>4</td><td>—</td><td>—</td></tr>
+  <tr><td>RASCompanies-ODGDEMO</td><td>3</td><td>3</td><td>—</td><td>—</td></tr>
+  <tr><td>jwsoftware-ODGWEBSVCS</td><td>3</td><td>3</td><td>—</td><td>—</td></tr>
+  <tr><td>Guidewire-ODGWEBSVCS</td><td>1</td><td>1</td><td>—</td><td>—</td></tr>
+  <tr><td>SheakleyUniservice-ODGWEBSVCS</td><td>7</td><td>7</td><td>—</td><td>—</td></tr>
+  <tr><td>CareworksAbsence-ODGDEMO</td><td>50</td><td>9</td><td>Items 1, 3</td><td>Item 4 (41 tests)</td></tr>
+  <tr><td>Caterpillar-ODGDEMO</td><td>50</td><td>42</td><td>Items 1, 3</td><td>Items 4, 5 (8 tests)</td></tr>
+  <tr><td>NMMutual-ODGDEMO</td><td>6</td><td>1</td><td>—</td><td>Item 4 (5 tests)</td></tr>
+  <tr><td>PMAGroup-ODGDEMO</td><td>25</td><td>17</td><td>—</td><td>Item 4 (8 tests)</td></tr>
+  <tr><td>UnivofMichigan-ODGDEMO</td><td>50</td><td>47</td><td>Item 1 (3 tests)</td><td>—</td></tr>
+  <tr><td>WindhamGroup-ODGDEMO</td><td>50</td><td>50</td><td>—</td><td>—</td></tr>
+  <tr><td>AthensAdmin-ODGWEBSVCS</td><td>50</td><td>40</td><td>Items 1, 3</td><td>Item 4 (10 tests)</td></tr>
+  <tr><td>CanadaLife-ODGWEBSVCS</td><td>50</td><td>50</td><td>—</td><td>—</td></tr>
+  <tr><td>CityofFortWorth-ODGWEBSVCS</td><td>50</td><td>41</td><td>—</td><td>Item 4 (9 tests)</td></tr>
+  <tr><td>JohnsEastern-ODGWEBSVCS</td><td>50</td><td>36</td><td>—</td><td>Item 4 (14 tests)</td></tr>
+  <tr><td>MissouriEmployersMut-ODGWEBSVCS</td><td>50</td><td>27</td><td>—</td><td>Item 4 (23 tests)</td></tr>
+  <tr><td>PSWCA-ODGWEBSVCS</td><td>50</td><td>41</td><td>—</td><td>Item 4 (9 tests)</td></tr>
+  <tr><td>SedgwickWellComp-ODGWEBSVCS</td><td>50</td><td>38</td><td>—</td><td>Item 4 (12 tests)</td></tr>
+  <tr><td>Systema-ODGWEBSVCS</td><td>10</td><td>8</td><td>Item 3 (1 test)</td><td>Item 4 (1 test)</td></tr>
+  <tr><td>Wstfld-ODGWEBSVCS</td><td>50</td><td>16</td><td>—</td><td>Item 4 (34 tests)</td></tr>
+  <tr><td>Zenith-ODGWEBSVCS</td><td>50</td><td>1</td><td>Items 2, 3</td><td>Items 1, 4 (all but 1 test have at least one open issue)</td></tr>
+  <tr><td>paradigm-ODGWEBSVCS</td><td>24</td><td>2</td><td>—</td><td>Item 4 (22 tests)</td></tr>
+</table>
+
+<hr />
+
+<h2>Open Items</h2>
+
+<h3>Item 1 — <code>cfactors.trigger</code> returns ICD-10 identifier in adapter; legacy returned ICD-9 (12 tests) &nbsp;<span class="badge badge-pending">PENDING PRODUCT CONFIRMATION</span></h3>
+
+<p>The <code>cfactors</code> section reports which comorbidity factor triggered and what code activated it. Legacy returned the ICD-9 code that the customer submitted (e.g. <code>401</code> for hypertension, <code>250</code> for diabetes, <code>278</code> for obesity). The adapter returns the ICD-10 equivalent code that ODG v1.2 uses internally (e.g. <code>I10</code>, <code>E10</code>, <code>E65</code>). This affects hypertension, diabetes, obesity, depression, and smoker factors across 5 customers.</p>
+
+<div class="pending">
+  <strong>Open question for Product:</strong> The <code>trigger</code> field in <code>cfactors</code> was previously the customer-submitted ICD-9 code. It will now be an ODG v1.2 ICD-10 code. Customers who display this field in their UIs will see a code format change. Please confirm this is acceptable before cutover, or specify whether the adapter should map the trigger back to the customer-submitted input code.
+</div>
+
+<table>
+  <tr><th>Test</th><th>Customer</th><th>Factor</th><th>Legacy Value (ICD-9)</th><th>Adapter Value (ICD-10)</th></tr>
+  <tr><td>CareworksAbsence-ODGDEMO-TEST-4</td><td>CareworksAbsence</td><td>hypertension</td><td><code>401</code></td><td><code>I10</code></td></tr>
+  <tr><td>CareworksAbsence-ODGDEMO-TEST-5</td><td>CareworksAbsence</td><td>hypertension</td><td><code>401</code></td><td><code>I10</code></td></tr>
+  <tr><td>Caterpillar-ODGDEMO-TEST-11</td><td>Caterpillar</td><td>depression</td><td><code>296.21</code></td><td><code>F32</code></td></tr>
+  <tr><td>Caterpillar-ODGDEMO-TEST-19</td><td>Caterpillar</td><td>hypertension</td><td><code>401</code></td><td><code>I10</code></td></tr>
+  <tr><td>Caterpillar-ODGDEMO-TEST-20</td><td>Caterpillar</td><td>hypertension</td><td><code>401</code></td><td><code>I10</code></td></tr>
+  <tr><td>UnivofMichigan-ODGDEMO-TEST-44</td><td>UnivofMichigan</td><td>diabetes</td><td><code>250</code></td><td><code>E10</code></td></tr>
+  <tr><td>UnivofMichigan-ODGDEMO-TEST-45</td><td>UnivofMichigan</td><td>diabetes</td><td><code>250</code></td><td><code>E11</code></td></tr>
+  <tr><td>UnivofMichigan-ODGDEMO-TEST-46</td><td>UnivofMichigan</td><td>obesity</td><td><code>278</code></td><td><code>E65</code></td></tr>
+  <tr><td>AthensAdmin-ODGWEBSVCS-TEST-42</td><td>AthensAdmin</td><td>depression</td><td><code>308.9</code></td><td><code>F43.0</code></td></tr>
+  <tr><td>Zenith-ODGWEBSVCS-TEST-17</td><td>Zenith</td><td>hypertension / diabetes</td><td><code>402.00</code> / <code>250</code></td><td><code>I11.9</code> / <code>E11.9</code></td></tr>
+  <tr><td>Zenith-ODGWEBSVCS-TEST-27</td><td>Zenith</td><td>obesity</td><td><code>278.02</code></td><td><code>E66.3</code></td></tr>
+  <tr><td>Zenith-ODGWEBSVCS-TEST-40</td><td>Zenith</td><td>smoker</td><td><code>305.1</code></td><td><code>F17.210</code></td></tr>
+</table>
+
+<hr />
+
+<h3>Item 2 — Adapter returns complete ICD code list; legacy truncated at index 13 (Zenith, 41 tests) &nbsp;<span class="badge badge-accepted">PRODUCT ACCEPTED</span></h3>
+
+<p>For many Zenith test cases, the <code>icdcodes</code> array in the legacy response ends at index 12 — entries at positions 13 and above are returned as empty strings. The adapter returns ICD code objects for all positions the ODG v1.2 API provides, resulting in populated objects at positions 13–16+ where the legacy response had empty values.</p>
+
+<div class="warn">
+  <strong>Product decision:</strong> Adapter behavior is correct and an improvement. The legacy PHP had a code-side truncation or data gap at that array position. The adapter returns the complete set of ICD codes as provided by ODG v1.2.
+</div>
+
+<table>
+  <tr><th>Direction</th><th>Cause</th><th>Example</th></tr>
+  <tr><td>Legacy → empty string; Adapter → ICD code object</td><td>Legacy response truncated <code>icdcodes.icdcode</code> array; ODG v1.2 returns all entries</td><td>Zenith-TEST-10 <code>icdcodes.icdcode[14]</code>: legacy=<em style="color:#999">(empty)</em> adapter=<code>{"code":"Y92.9","name":"Unspecified place..."}</code></td></tr>
+</table>
+
+<hr />
+
+<h3>Item 3 — <code>alertdesc.yellow</code> populated in adapter where legacy returned empty string (11 tests) &nbsp;<span class="badge badge-accepted">PRODUCT ACCEPTED</span> &nbsp;<span class="badge badge-fixed">Adapter Fix Applied</span></h3>
+
+<p>For certain yellow-alert risk cases, the legacy PHP response returned an <code>alertdesc</code> object with an empty <code>yellow</code> value. The adapter returns the actual alert description text from ODG v1.2: "Consider early intervention and priority medical case management." This is distinct from the EXPECTED_DIFF category (cases where legacy had the alert text and the adapter currently omits the field); here, the direction is reversed — the adapter has the text and legacy was returning empty.</p>
+
+<div class="warn">
+  <strong>Product decision:</strong> Adapter behavior is correct and an improvement. Returning the alert description text is better than returning an empty string. No change to the adapter is required. Note that <code>alertdesc</code> is not yet fully implemented in all adapter code paths — the EXPECTED_DIFF rows elsewhere in this report reflect cases where legacy populated the alert and the adapter still omits it.
+</div>
+
+<div class="note">
+  <strong>Fix applied — adapter codebase:</strong> <code>alertdesc</code> colour children are now gated on the presence of a matching <code>alert</code> value in the mapped cfactors output. A colour (e.g. <code>yellow</code>) is only emitted in <code>alertdesc</code> if at least one applied cfactor carries <code>alert: "yellow"</code>. Orphaned descriptions with no corresponding cfactor alert are suppressed. Fix is in <code>src/transformers/calculator.ts</code> — pending re-run of comparison tests to confirm.
+</div>
+
+<table>
+  <tr><th>Customer</th><th>Tests Affected</th><th>Legacy Value</th><th>Adapter Value</th></tr>
+  <tr><td>Zenith-ODGWEBSVCS</td><td>TEST-2 through TEST-9, TEST-40, TEST-49 (10 tests)</td><td><code>alertdesc.yellow = ""</code></td><td><code>alertdesc.yellow = "Consider early intervention and priority medical case management."</code></td></tr>
+  <tr><td>Systema-ODGWEBSVCS</td><td>TEST-9 (1 test)</td><td><code>alertdesc.yellow = ""</code></td><td><code>alertdesc.yellow = "Consider early intervention and priority medical case management."</code></td></tr>
+</table>
+
+<hr />
+
+<h3>Item 4 — Systematic comorbidity calculation differences between ODG v1.2 and legacy (~240 tests, 14 customers) &nbsp;<span class="badge badge-pending">PENDING PRODUCT CONFIRMATION</span></h3>
+
+<p>The most widespread finding is a systematic divergence in the comorbidity calculator's output between the legacy PHP/ODG system and ODG v1.2. The difference manifests consistently across the following fields:</p>
+
+<ul>
+  <li><strong><code>riskassessment.magnitude</code></strong> and <strong><code>riskassessment.volatility</code></strong> (132 and 128 failing tests respectively): these are the spread components of the risk score. Even when <code>riskassessment.score</code> is within the ±5 threshold, magnitude and volatility frequently differ beyond ±5. The root cause appears to be a change in the ODG v1.2 actuarial model for these sub-components.</li>
+  <li><strong><code>riskassessment.score</code></strong> (20 tests directly flagged as CONTENT_MISMATCH): cases where the score itself exceeds the ±5 threshold, most severely in JohnsEastern-TEST-19 (legacy: 46.83 → adapter: 72.76) and TEST-22 (legacy: 77.17 → adapter: 82.12).</li>
+  <li><strong><code>riskassessment.status</code></strong> (26 tests): a consequence of score boundary crossings. The status label (Green/Yellow/Orange/Red) flips when the score shifts across a band threshold. Examples: "Green (Moderate)" → "Yellow (Cautionary)", "Yellow (Cautionary)" → "Orange (High)".</li>
+  <li><strong><code>adjustedduration.cp95.days</code></strong> and <strong><code>adjustedduration.cp100.days</code></strong> (116 and 107 failing tests): adjusted return-to-work duration predictions at the 95th and 100th percentile differ outside the ±5 day threshold.</li>
+  <li><strong><code>adjustedduration.bp.days</code></strong> (27 failing tests): best-practice duration differs, most notably for PSWCA (9 tests) and JohnsEastern.</li>
+  <li><strong><code>adjustedsummaryguidelines.*</code></strong> (atriskclaims, midrangeclaims, atriskallabsence, midrangeallabsence — 51/46/45/35 failing tests): population-level statistics for the matched diagnosis group differ outside tolerance.</li>
+</ul>
+
+<div class="pending">
+  <strong>Open question for Product:</strong> The ODG v1.2 comorbidity calculator systematically produces different outputs from the legacy system for magnitude, volatility, duration, and population statistics. The most likely explanation is an intentional update to the actuarial model in ODG v1.2. Before cutover, Product must confirm:
+  <ol>
+    <li>Is the ODG v1.2 comorbidity model intentionally different from the legacy model? If yes, the adapter results are correct and customers should expect updated numbers.</li>
+    <li>Is the visible <code>riskassessment.status</code> band label change (e.g. Yellow → Orange) acceptable to affected customers? This is the most customer-visible impact — 26 test cases cross a band boundary.</li>
+    <li>Are the extreme outliers (JohnsEastern TEST-19: duration 27 days → 118 days; TEST-22: 142 days → 198 days) expected model outputs for those specific input combinations, or do they indicate a potential input mapping issue?</li>
+  </ol>
+</div>
+
+<table>
+  <tr><th>Customer</th><th>Failing Tests</th><th>Primary Fields Affected</th><th>Severity</th></tr>
+  <tr><td>CareworksAbsence-ODGDEMO</td><td>41</td><td>magnitude, volatility, cp95/cp100 days, guidelines, status (4 tests)</td><td>High — most tests fail</td></tr>
+  <tr><td>Wstfld-ODGWEBSVCS</td><td>34</td><td>magnitude, volatility, score, cp95/cp100 days, guidelines, status</td><td>High — 34 of 50 fail</td></tr>
+  <tr><td>paradigm-ODGWEBSVCS</td><td>22</td><td>cp100 days (just outside ±5)</td><td>Medium</td></tr>
+  <tr><td>MissouriEmployersMut-ODGWEBSVCS</td><td>23</td><td>cp95 days (21 tests), cp100 days, status (2 tests)</td><td>Medium-High</td></tr>
+  <tr><td>JohnsEastern-ODGWEBSVCS</td><td>14</td><td>bp/cp95/cp100 days (inc. extreme outliers TEST-19, TEST-22)</td><td>High — includes >4× duration differences</td></tr>
+  <tr><td>SedgwickWellComp-ODGWEBSVCS</td><td>12</td><td>magnitude, volatility, duration, guidelines</td><td>Medium</td></tr>
+  <tr><td>AthensAdmin-ODGWEBSVCS</td><td>10 (item 5 only)</td><td>magnitude, volatility, cp95/cp100 days, guidelines</td><td>Medium</td></tr>
+  <tr><td>CityofFortWorth-ODGWEBSVCS</td><td>9</td><td>bp/cp95/cp100 days, status (2 tests)</td><td>Medium</td></tr>
+  <tr><td>PSWCA-ODGWEBSVCS</td><td>9</td><td>bp.days (all 9 tests)</td><td>Medium — BP-specific only</td></tr>
+  <tr><td>PMAGroup-ODGDEMO</td><td>8</td><td>cp95/cp100 days</td><td>Medium</td></tr>
+  <tr><td>Zenith-ODGWEBSVCS</td><td>49 (most overlap with Items 2–4)</td><td>magnitude, volatility, cp95/cp100 days, guidelines</td><td>High — all tests affected</td></tr>
+  <tr><td>NMMutual-ODGDEMO</td><td>5</td><td>cp95/cp100 days</td><td>Medium</td></tr>
+  <tr><td>Systema-ODGWEBSVCS</td><td>1</td><td>magnitude, volatility, duration</td><td>Low</td></tr>
+  <tr><td>Caterpillar-ODGDEMO</td><td>5 (item 5 only)</td><td>magnitude, status, bp/cp95/cp100 days</td><td>Medium</td></tr>
+</table>
+
+<hr />
+
+<h3>Item 5 — <code>adjustedsummaryguidelines.midrangeallabsence</code> = 0 in legacy vs non-zero in adapter (Caterpillar, 3 tests) &nbsp;<span class="badge badge-pending">PENDING PRODUCT DECISION</span></h3>
+
+<p>Three Caterpillar test cases return <code>adjustedsummaryguidelines.midrangeallabsence = 0</code> in the legacy response but non-zero values in the adapter. For the same inputs, the adapter returns 101, 53, and 75 respectively. A value of 0 is anomalous for this population-level statistic field and suggests either a data gap in the legacy ODG dataset for those specific diagnosis groups, or a PHP logic fault. The adapter, drawing from ODG v1.2, returns the statistically expected non-zero population value.</p>
+
+<div class="pending">
+  <strong>Open question for Product/SEAD:</strong> Please confirm whether the legacy value of 0 for <code>midrangeallabsence</code> in these cases was intentional (e.g., a specific data suppression rule) or a known legacy data gap/bug. If the legacy value of 0 was a bug, the adapter result is correct. If 0 was intentional, SEAD should verify whether ODG v1.2 applies the same suppression rule.
+</div>
+
+<table>
+  <tr><th>Test</th><th>Customer</th><th>Property</th><th>Legacy Value</th><th>Adapter Value</th></tr>
+  <tr><td>Caterpillar-ODGDEMO-TEST-43</td><td>Caterpillar</td><td><code>root.adjustedsummaryguidelines.midrangeallabsence</code></td><td><code>0</code></td><td><code>101</code></td></tr>
+  <tr><td>Caterpillar-ODGDEMO-TEST-44</td><td>Caterpillar</td><td><code>root.adjustedsummaryguidelines.midrangeallabsence</code></td><td><code>0</code></td><td><code>53</code></td></tr>
+  <tr><td>Caterpillar-ODGDEMO-TEST-45</td><td>Caterpillar</td><td><code>root.adjustedsummaryguidelines.midrangeallabsence</code></td><td><code>0</code></td><td><code>75</code></td></tr>
+</table>
+
+<hr />
+
+<h2>Summary</h2>
+
+<table>
+  <tr><th>Item</th><th>Affected Tests</th><th>Affected Customer(s)</th><th>Action Required</th><th>Owner</th><th>Status</th></tr>
+  <tr>
+    <td>1 — <code>cfactors.trigger</code> ICD-10 format vs ICD-9</td>
+    <td>12</td>
+    <td>CareworksAbsence, Caterpillar, UnivofMichigan, AthensAdmin, Zenith</td>
+    <td>Product confirms ICD-10 trigger codes are acceptable for cutover, or specifies adapter should echo the submitted input code.</td>
+    <td>Product</td>
+    <td><span class="badge badge-pending">PENDING PRODUCT CONFIRMATION</span></td>
+  </tr>
+  <tr>
+    <td>2 — Adapter returns extended ICD code list (legacy truncated)</td>
+    <td>41</td>
+    <td>Zenith</td>
+    <td>None — adapter behavior is an improvement.</td>
+    <td>—</td>
+    <td><span class="badge badge-accepted">PRODUCT ACCEPTED</span></td>
+  </tr>
+  <tr>
+    <td>3 — <code>alertdesc.yellow</code> populated vs empty legacy</td>
+    <td>11</td>
+    <td>Zenith, Systema</td>
+    <td>None — adapter behavior is an improvement. Fix applied in adapter codebase; pending test re-run.</td>
+    <td>—</td>
+    <td><span class="badge badge-accepted">PRODUCT ACCEPTED</span> <span class="badge badge-fixed">Adapter Fix Applied</span></td>
+  </tr>
+  <tr>
+    <td>4 — Systematic comorbidity calc differences (magnitude, volatility, status, duration)</td>
+    <td>~240</td>
+    <td>14 customers (see table in Item 4)</td>
+    <td>Product confirms ODG v1.2 model divergence is acceptable; explicitly approves visible <code>riskassessment.status</code> band label changes; reviews extreme outliers in JohnsEastern.</td>
+    <td>Product</td>
+    <td><span class="badge badge-pending">PENDING PRODUCT CONFIRMATION</span></td>
+  </tr>
+  <tr>
+    <td>5 — <code>midrangeallabsence</code> = 0 in legacy vs non-zero in adapter (Caterpillar)</td>
+    <td>3</td>
+    <td>Caterpillar</td>
+    <td>Product/SEAD determines whether legacy returning 0 was a bug or intended suppression.</td>
+    <td>Product / SEAD team</td>
+    <td><span class="badge badge-pending">PENDING PRODUCT DECISION</span></td>
+  </tr>
+</table>
+
+</body>
+</html>

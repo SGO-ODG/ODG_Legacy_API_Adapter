@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>One Search — Adapter Comparison Discrepancy Report</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #172B4D;
+      max-width: 1100px;
+      margin: 40px auto;
+      padding: 0 24px;
+      line-height: 1.6;
+    }
+    h1 { font-size: 26px; border-bottom: 2px solid #DFE1E6; padding-bottom: 8px; margin-top: 32px; }
+    h2 { font-size: 20px; border-bottom: 1px solid #DFE1E6; padding-bottom: 6px; margin-top: 36px; color: #0052CC; }
+    h3 { font-size: 16px; margin-top: 24px; color: #253858; }
+    p  { margin: 10px 0; }
+    ul, ol { margin: 10px 0 10px 24px; }
+    li { margin: 4px 0; }
+    code {
+      background: #F4F5F7;
+      border: 1px solid #DFE1E6;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 14px 0;
+      font-size: 13px;
+    }
+    th {
+      background: #0052CC;
+      color: #fff;
+      text-align: left;
+      padding: 8px 10px;
+    }
+    td {
+      border: 1px solid #DFE1E6;
+      padding: 6px 10px;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #F4F5F7; }
+    .badge {
+      display: inline-block;
+      border-radius: 3px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+    .badge-pass     { background: #E3FCEF; color: #006644; border: 1px solid #57D9A3; }
+    .badge-fail     { background: #FFEBE6; color: #BF2600; border: 1px solid #FF5630; }
+    .badge-warn     { background: #FFFAE6; color: #974F0C; border: 1px solid #FFE380; }
+    .badge-info     { background: #DEEBFF; color: #0747A6; border: 1px solid #4C9AFF; }
+    .badge-green    { background: #E3FCEF; color: #006644; border: 1px solid #57D9A3; }
+    .badge-accepted { background: #FFFAE6; color: #974F0C; border: 1px solid #FFE380; }
+    .badge-pending  { background: #EAE6FF; color: #403294; border: 1px solid #998DD9; }
+    .note {
+      background: #DEEBFF;
+      border-left: 4px solid #0052CC;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .warn {
+      background: #FFFAE6;
+      border-left: 4px solid #FF8B00;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .pending {
+      background: #EAE6FF;
+      border-left: 4px solid #6554C0;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .summary-grid {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+    }
+    .summary-card {
+      flex: 1;
+      min-width: 140px;
+      border: 1px solid #DFE1E6;
+      border-radius: 4px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .summary-card .number { font-size: 32px; font-weight: bold; }
+    .summary-card .label  { font-size: 12px; color: #5E6C84; margin-top: 4px; }
+    .num-green  { color: #006644; }
+    .num-red    { color: #BF2600; }
+    .num-orange { color: #974F0C; }
+    .num-blue   { color: #0052CC; }
+    .num-purple { color: #403294; }
+    hr { border: none; border-top: 1px solid #DFE1E6; margin: 32px 0; }
+    .arch-table td { vertical-align: middle; }
+    .arch-table th { background: #42526E; }
+  </style>
+</head>
+<body>
+
+<h1>One Search — Adapter Comparison Discrepancy Report</h1>
+<p>
+  <strong>API path:</strong> <code>POST /restws/onesearch</code> &nbsp;|&nbsp;
+  <strong>Report date:</strong> 2026-11-17 &nbsp;|&nbsp;
+  <strong>Source CSV:</strong> <code>api-tester/tests-scripts/output/legacy-customer-onesearch-results.csv</code>
+</p>
+<p>
+  This report covers only open items requiring clarification or a decision from the SEAD team or Product. It includes product-confirmed behaviors for record, and one open regression pending a product decision.
+</p>
+
+<hr />
+
+<h2>Discrepancy Type Reference</h2>
+<p>
+  Each test case fires a POST to both the legacy PHP API and the adapter API in parallel, then tags each output row with one of the following discrepancy types. Types marked <strong>Yes</strong> under <em>Counts as failure?</em> cause the test to be reported as FAIL.
+</p>
+<p>
+  <strong>Key distinction:</strong> For HTTP 200 responses, onesearch performs <em>schema-only</em> comparison (property names, nesting, and data types) — it does <em>not</em> compare actual result values, because search results legitimately differ between legacy SQL and ODG v1.2 Elasticsearch. Full content comparison is only applied to non-200 (error) responses, where both sides must be byte-for-byte identical.
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Counts as Failure?</th>
+      <th>Applies to</th>
+      <th>What It Means</th>
+      <th>Detection Logic</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>PASS</code></td>
+      <td><span class="badge badge-pass">No</span></td>
+      <td>All responses</td>
+      <td>HTTP status codes and response schema are identical on both sides. No differences found.</td>
+      <td>Emitted when zero diff rows are produced for a test after all checks complete.</td>
+    </tr>
+    <tr>
+      <td><code>COUNT_INFO</code></td>
+      <td><span class="badge badge-pass">No (informational)</span></td>
+      <td>200 responses</td>
+      <td>The number of results for a given search type (e.g. ICD10, CPT) differs between legacy and adapter. Both sides have results; only the count differs. This is expected because: (1) the adapter caps results at ~500 per type, while legacy was unbounded; (2) Elasticsearch and SQL return different result sets for the same query. Only records whose key (code/id) exists on <em>both</em> sides are compared for value equality.</td>
+      <td>Emitted after type-level comparison when <code>legacyItems.length !== adapterItems.length</code> and both sides have at least one result. Does not set <code>failingRows</code>.</td>
+    </tr>
+    <tr>
+      <td><code>HTTP_STATUS_DIFF</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>All responses</td>
+      <td>Legacy and adapter returned different HTTP status codes. Body comparison is skipped — the status difference is the entire result for that test.</td>
+      <td>Triggered before body parsing when <code>legacyResult.status !== adapterResult.status</code>.</td>
+    </tr>
+    <tr>
+      <td><code>RESULT_PRESENCE_DIFF</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>200 responses</td>
+      <td>One side returned a non-empty result set and the other returned zero results, even though both returned HTTP 200. This is a structural disagreement more serious than a count difference.</td>
+      <td>Triggered when <code>hasResults(legacy) !== hasResults(adapter)</code> after both parse successfully with the same HTTP 200 status.</td>
+    </tr>
+    <tr>
+      <td><code>MISSING_IN_ADAPTER</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>200 responses (schema)</td>
+      <td>A property path present in the legacy response schema is absent from the adapter response schema. The adapter is returning a structurally incomplete response.</td>
+      <td>Schema comparator finds a path in <code>legacySchema</code> with no corresponding entry in <code>adapterSchema</code>.</td>
+    </tr>
+    <tr>
+      <td><code>EXTRA_IN_ADAPTER</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>200 responses (schema)</td>
+      <td>A property path present in the adapter response schema is absent from the legacy schema. The adapter is returning fields that legacy never included, which could break customer parsers.</td>
+      <td>Schema comparator finds a path in <code>adapterSchema</code> with no corresponding entry in <code>legacySchema</code>.</td>
+    </tr>
+    <tr>
+      <td><code>TYPE_MISMATCH</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>200 responses (schema)</td>
+      <td>The same property path has a different data type in legacy vs. adapter (e.g. legacy returns a <code>string</code>, adapter returns a <code>number</code>). The schema is structurally compatible but types diverge.</td>
+      <td>Schema comparator finds the same path in both schemas but <code>legacyType !== adapterType</code>.</td>
+    </tr>
+    <tr>
+      <td><code>TYPE_MISSING_IN_ADAPTER</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>200 responses</td>
+      <td>Legacy returned at least one result for a search result type (e.g. ICD9, ICD10, CPT) but the adapter returned zero results for that same type. The adapter is entirely missing a result category.</td>
+      <td>Triggered after type-level extraction when <code>adapterItems.length === 0</code> for a type path that has <code>legacyItems.length &gt; 0</code>.</td>
+    </tr>
+    <tr>
+      <td><code>VALUE_MISMATCH</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>200 responses</td>
+      <td>A field value differs between a legacy record and its matching adapter record (matched by code/id key). Only records present on <em>both</em> sides are compared; records unique to one side are skipped. ICD9/ICD10 <code>name</code> field differences are suppressed as a known permanent quirk (legacy returns the matched description, adapter returns the canonical code name).</td>
+      <td>Key-join: for each type group, builds a <code>code → item</code> map on each side, then calls <code>compareContent(legacyItem, adapterItem)</code> for keys that exist in both maps.</td>
+    </tr>
+    <tr>
+      <td><code>CONTENT_MISMATCH</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>Non-200 responses</td>
+      <td>The error response body values differ between legacy and adapter. Used only when both sides returned the same non-200 status code (e.g. both 403). The error message, structure, and content must be identical.</td>
+      <td>Triggered on the non-200 path: <code>compareContent(legacyNormalized, adapterNormalized)</code> is called (full recursive value comparison, not schema-only).</td>
+    </tr>
+    <tr>
+      <td><code>FORMAT_MISMATCH</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>All responses</td>
+      <td>Legacy responded with one format (XML or JSON) but the adapter responded with the other. Processing continues after this flag so schema differences are also captured.</td>
+      <td>Triggered when <code>detectFormat(legacy) !== detectFormat(adapter)</code> after both HTTP calls succeed with the same status code.</td>
+    </tr>
+    <tr>
+      <td><code>PARSE_ERROR</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>All responses</td>
+      <td>One or both responses could not be parsed as valid XML or JSON. Body comparison is skipped and the exception message is recorded in the <code>detail</code> column.</td>
+      <td>Triggered when <code>JSON.parse()</code> or <code>XMLParser.parse()</code> throws for either side's response body.</td>
+    </tr>
+    <tr>
+      <td><code>NETWORK_ERROR</code></td>
+      <td><span class="badge badge-fail">Yes</span></td>
+      <td>All responses</td>
+      <td>The HTTP request to the legacy or adapter host failed at the network level (connection refused, DNS failure, 30-second timeout). No HTTP status code or body is available.</td>
+      <td>Triggered when <code>axios.post()</code> itself throws (network-level, not an HTTP error response).</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Discrepancy Type Summary — This Run</h3>
+<p>
+  Counts below are unique test cases (not output rows). Tests with only <code>COUNT_INFO</code> rows are counted as PASS by the script and shown separately for transparency.
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Discrepancy Type</th>
+      <th>Unique Test Cases</th>
+      <th>Counts as Failure?</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>PASS</code> (pure — no other rows)</td>
+      <td>10</td>
+      <td><span class="badge badge-pass">No</span></td>
+      <td>HTTP status and schema matched exactly with no informational notes. Includes 404/404 no-results cases where both sides agreed.</td>
+    </tr>
+    <tr>
+      <td><code>COUNT_INFO</code> only (also counts as PASS)</td>
+      <td>147</td>
+      <td><span class="badge badge-pass">No (informational)</span></td>
+      <td>Result counts differ between legacy and adapter, but both sides have results and schema matches. Expected due to adapter's ~500 result cap and Elasticsearch vs SQL result set differences.</td>
+    </tr>
+    <tr>
+      <td><code>HTTP_STATUS_DIFF</code> — Adapter improvements (legacy 404/500 → adapter 200)</td>
+      <td>17</td>
+      <td><span class="badge badge-fail">Yes — Product Accepted</span></td>
+      <td>Elasticsearch found results that legacy SQL REGEXP could not match. Confirmed correct behavior — no adapter fix needed. See Item 1.</td>
+    </tr>
+    <tr>
+      <td><code>HTTP_STATUS_DIFF</code> — Regression (legacy 200 → adapter 404)</td>
+      <td>1</td>
+      <td><span class="badge badge-fail">Yes — Pending Product Decision</span></td>
+      <td>MLC-ODGDEMO only. AU ICD10 content excluded by default US-only country scope in ODG v1.2. See Item 2.</td>
+    </tr>
+    <tr>
+      <td><code>MISSING_IN_ADAPTER</code></td>
+      <td>0</td>
+      <td><span class="badge badge-pass">N/A</span></td>
+      <td>No schema gaps in this run.</td>
+    </tr>
+    <tr>
+      <td><code>EXTRA_IN_ADAPTER</code></td>
+      <td>0</td>
+      <td><span class="badge badge-pass">N/A</span></td>
+      <td>No extra adapter-only fields in this run.</td>
+    </tr>
+    <tr>
+      <td><code>TYPE_MISMATCH</code></td>
+      <td>0</td>
+      <td><span class="badge badge-pass">N/A</span></td>
+      <td>No schema type mismatches in this run.</td>
+    </tr>
+    <tr>
+      <td><code>TYPE_MISSING_IN_ADAPTER</code></td>
+      <td>0</td>
+      <td><span class="badge badge-pass">N/A</span></td>
+      <td>No result type entirely absent from adapter in this run.</td>
+    </tr>
+    <tr>
+      <td><code>RESULT_PRESENCE_DIFF</code></td>
+      <td>0</td>
+      <td><span class="badge badge-pass">N/A</span></td>
+      <td>No cases where one side had results and the other had none at HTTP 200.</td>
+    </tr>
+    <tr>
+      <td><code>VALUE_MISMATCH</code></td>
+      <td>0</td>
+      <td><span class="badge badge-pass">N/A</span></td>
+      <td>No field value mismatches on key-matched records in this run.</td>
+    </tr>
+    <tr>
+      <td><code>CONTENT_MISMATCH</code></td>
+      <td>0</td>
+      <td><span class="badge badge-pass">N/A</span></td>
+      <td>No non-200 body content mismatches in this run.</td>
+    </tr>
+    <tr>
+      <td><code>FORMAT_MISMATCH</code></td>
+      <td>0</td>
+      <td><span class="badge badge-pass">N/A</span></td>
+      <td>No format mismatches in this run.</td>
+    </tr>
+    <tr>
+      <td><code>PARSE_ERROR</code></td>
+      <td>0</td>
+      <td><span class="badge badge-pass">N/A</span></td>
+      <td>No parse errors in this run.</td>
+    </tr>
+    <tr>
+      <td><code>NETWORK_ERROR</code></td>
+      <td>0</td>
+      <td><span class="badge badge-pass">N/A</span></td>
+      <td>No network errors in this run.</td>
+    </tr>
+    <tr>
+      <td><strong>Total</strong></td>
+      <td><strong>175</strong></td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2>Search Engine Architecture Difference</h2>
+
+<p>
+  The legacy PHP One Search and the ODG v1.2 <code>/search</code> API use fundamentally different search technologies. This is the primary driver of all status and count differences observed in this report.
+</p>
+
+<table class="arch-table">
+  <thead>
+    <tr>
+      <th>Dimension</th>
+      <th>Legacy PHP One Search</th>
+      <th>ODG v1.2 / Adapter</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Search engine</strong></td>
+      <td>SQL database — <code>LIKE</code> / <code>REGEXP</code> pattern matching</td>
+      <td>Elasticsearch — full-text indexing, tokenization, relevance scoring</td>
+    </tr>
+    <tr>
+      <td><strong>Matching behavior</strong></td>
+      <td>Exact substring or regex match against stored text. Abbreviations, alternate forms, and partial tokens that do not appear literally in the indexed value return 0 results.</td>
+      <td>Tokenized, stemmed, and relevance-ranked search. Abbreviations (e.g. <code>ACJ</code>, <code>CFL</code>), synonyms, and partial term matches resolve to relevant results.</td>
+    </tr>
+    <tr>
+      <td><strong>Result count</strong></td>
+      <td>Unbounded — legacy returned full result sets (e.g. 98,767 ICD10 matches for a broad term).</td>
+      <td>Capped at approximately 500 results per search type per ODG API design.</td>
+    </tr>
+    <tr>
+      <td><strong>No-results condition</strong></td>
+      <td>HTTP 404 — returned when the SQL query finds zero rows.</td>
+      <td>HTTP 404 — returned when <code>/search</code> returns an empty result set for all requested types.</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2>Executive Summary</h2>
+
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="number num-blue">175</div>
+    <div class="label">Total Tests</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-green">157</div>
+    <div class="label">PASS (89.7%)</div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-green">17</div>
+    <div class="label">Adapter Improvements<br/><small>(Product Accepted)</small></div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-red">1</div>
+    <div class="label">Regression<br/><small>(Pending Product Decision)</small></div>
+  </div>
+  <div class="summary-card">
+    <div class="number num-purple">1</div>
+    <div class="label">Result Count Cap<br/><small>(Pending Product Confirmation)</small></div>
+  </div>
+</div>
+
+<p>
+  175 unique tests across 5 customers. 157 (89.7%) passed with matching content. Of the 18 HTTP status differences, 17 are adapter improvements where Elasticsearch surfaces results that legacy SQL could not find — product confirmed as correct behavior. 1 test (MLC-ODGDEMO-TEST-33) is a true regression pending a product decision on AU country scope.
+</p>
+
+<h3>Results by Customer</h3>
+<table>
+  <thead>
+    <tr>
+      <th>Customer</th>
+      <th>Tests Run</th>
+      <th>PASS</th>
+      <th>Adapter Improvements<br/><small>(Legacy 404/500 → Adapter 200)</small></th>
+      <th>Regression<br/><small>(Legacy 200 → Adapter 404)</small></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>EmpireLife-ODGDEMO</td>
+      <td>4</td>
+      <td><span class="badge badge-pass">4</span></td>
+      <td>—</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td>HoneysuckleHealth-ODGDEMO</td>
+      <td>50</td>
+      <td><span class="badge badge-pass">48</span></td>
+      <td><span class="badge badge-green">2</span></td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td>MLC-ODGDEMO</td>
+      <td>50</td>
+      <td><span class="badge badge-pass">46</span></td>
+      <td><span class="badge badge-green">3</span></td>
+      <td><span class="badge badge-fail">1</span></td>
+    </tr>
+    <tr>
+      <td>Symetra-ODGDEMO</td>
+      <td>50</td>
+      <td><span class="badge badge-pass">43</span></td>
+      <td><span class="badge badge-green">7</span></td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td>paradigm-ODGWEBSVCS</td>
+      <td>21</td>
+      <td><span class="badge badge-pass">16</span></td>
+      <td><span class="badge badge-green">5</span></td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td><strong>Total</strong></td>
+      <td><strong>175</strong></td>
+      <td><strong><span class="badge badge-pass">157 (89.7%)</span></strong></td>
+      <td><strong><span class="badge badge-green">17</span></strong></td>
+      <td><strong><span class="badge badge-fail">1</span></strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2>Open Items</h2>
+
+<!-- ==================== ITEM 1: IMPROVEMENTS ==================== -->
+<h3>Item 1 — Adapter Improvements: Elasticsearch Broader Coverage (17 tests) &nbsp;<span class="badge badge-accepted">PRODUCT ACCEPTED</span></h3>
+
+<p>
+  These 17 tests show the adapter returning HTTP 200 with results where legacy returned HTTP 404 or HTTP 500. In every case the difference is attributable to Elasticsearch's superior full-text search capability. These are not regressions — customers using the adapter receive better search results than the legacy system provided.
+</p>
+
+<div class="note">
+  <strong>Product decision — confirmed, adapter behavior is correct:</strong> The Elasticsearch-backed ODG v1.2 search correctly resolves clinical abbreviations (e.g. <code>ACJ</code> for acromioclavicular joint, <code>CFL</code> for calcaneofibular ligament), partial terms, and alternate forms that legacy SQL <code>REGEXP</code> could not match. The adapter returning HTTP 200 for these cases is an improvement in search quality. No adapter code change is needed.
+  <br/><br/>
+  One additional case (Symetra-ODGDEMO-TEST-12) involved a legacy HTTP 500 caused by a CDATA special character (<code>)82</code>) breaking MySQL's <code>REGEXP</code> syntax. The adapter handled this gracefully and returned HTTP 200. This is an improvement in reliability.
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Test</th>
+      <th>Customer</th>
+      <th>Legacy Status</th>
+      <th>Adapter Status</th>
+      <th>Reason</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>HoneysuckleHealth-ODGDEMO-TEST-19</td><td>HoneysuckleHealth-ODGDEMO</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+    <tr><td>HoneysuckleHealth-ODGDEMO-TEST-24</td><td>HoneysuckleHealth-ODGDEMO</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+    <tr><td>MLC-ODGDEMO-TEST-6</td><td>MLC-ODGDEMO</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+    <tr><td>MLC-ODGDEMO-TEST-30</td><td>MLC-ODGDEMO</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+    <tr><td>MLC-ODGDEMO-TEST-38</td><td>MLC-ODGDEMO</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+    <tr><td>Symetra-ODGDEMO-TEST-3</td><td>Symetra-ODGDEMO</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+    <tr><td>Symetra-ODGDEMO-TEST-12</td><td>Symetra-ODGDEMO</td><td>500 (MySQL REGEXP error on CDATA special character)</td><td>200</td><td>Legacy SQL crashed on special character in input; Elasticsearch handled gracefully</td></tr>
+    <tr><td>Symetra-ODGDEMO-TEST-13</td><td>Symetra-ODGDEMO</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+    <tr><td>Symetra-ODGDEMO-TEST-14</td><td>Symetra-ODGDEMO</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+    <tr><td>Symetra-ODGDEMO-TEST-15</td><td>Symetra-ODGDEMO</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+    <tr><td>Symetra-ODGDEMO-TEST-16</td><td>Symetra-ODGDEMO</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+    <tr><td>Symetra-ODGDEMO-TEST-17</td><td>Symetra-ODGDEMO</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+    <tr><td>paradigm-ODGWEBSVCS-TEST-2</td><td>paradigm-ODGWEBSVCS</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+    <tr><td>paradigm-ODGWEBSVCS-TEST-4</td><td>paradigm-ODGWEBSVCS</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+    <tr><td>paradigm-ODGWEBSVCS-TEST-12</td><td>paradigm-ODGWEBSVCS</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+    <tr><td>paradigm-ODGWEBSVCS-TEST-20</td><td>paradigm-ODGWEBSVCS</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+    <tr><td>paradigm-ODGWEBSVCS-TEST-21</td><td>paradigm-ODGWEBSVCS</td><td>404</td><td>200</td><td>Search term not matched by SQL REGEXP; Elasticsearch found relevant results</td></tr>
+  </tbody>
+</table>
+
+<hr />
+
+<!-- ==================== ITEM 2: REGRESSION ==================== -->
+<h3>Item 2 — Regression: AU ICD10 Country Scope (MLC-ODGDEMO-TEST-33) &nbsp;<span class="badge badge-pending">PENDING PRODUCT DECISION</span></h3>
+
+<p>
+  This is the only customer-visible regression in the One Search comparison. The legacy SQL search found results for the search term; the ODG v1.2 Elasticsearch index does not return results for the same term when called without a country parameter.
+</p>
+
+<div class="pending">
+  <strong>Root cause — AU ICD10 content excluded by default US-only scope:</strong> The legacy PHP <code>onesearch</code> table was populated with both US and AU ICD10 codes in a single combined index. When an AU customer searched for an AU-specific ICD10 code or term, legacy SQL found it because AU content was present alongside US content.
+  <br/><br/>
+  The ODG v1.2 <code>/search</code> API scopes its Elasticsearch query by country. When no <code>country</code> parameter is supplied, the API defaults to US-only ICD10 search — AU-specific codes that are not part of the US content set are excluded, and the adapter returns HTTP 404.
+  <br/><br/>
+  MLC-ODGDEMO is an Australian customer. TEST-33's search term resolves to AU ICD10 content that exists in the legacy combined table but falls outside the US-only scope the adapter currently uses.
+  <br/><br/>
+  <strong>Note:</strong> AU country scope in ODG v1.2 is a superset of US — when <code>country=AU</code> is passed, the search returns both AU-specific and all US ICD10 codes. Defaulting to AU would not exclude any US results.
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Test</th>
+      <th>Customer</th>
+      <th>Legacy Status</th>
+      <th>Adapter Status</th>
+      <th>Impact</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>MLC-ODGDEMO-TEST-33</td>
+      <td>MLC-ODGDEMO</td>
+      <td>200</td>
+      <td>404</td>
+      <td>AU ICD10 code present in legacy's combined US+AU index; adapter's ODG call scoped to US-only → customer-visible regression for AU customers</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="warn">
+  <strong>Product decision required:</strong> Should the adapter always pass <code>country=AU</code> to the ODG v1.2 <code>/search</code> API for ICD10 searches?
+  <ul>
+    <li><strong>Option A — Always default to AU (recommended):</strong> Pass <code>country=AU</code> on every ICD10 <code>/search</code> call. AU is a superset of US content — no US results are lost, and AU-specific codes become reachable. Resolves the MLC regression without affecting US customers.</li>
+    <li><strong>Option B — Per-customer country routing:</strong> Determine the customer's country from <code>companymaster</code> (or a new config field) and pass the appropriate <code>country</code> value. More precise, but requires a schema or configuration change per customer.</li>
+    <li><strong>Option C — Accept the regression:</strong> Document as a known gap. AU-specific ICD10 codes will return 404 from the adapter. Only viable if no AU customers are planned for the adapter.</li>
+  </ul>
+</div>
+
+<hr />
+
+<!-- ==================== ITEM 3: RESULT COUNT CAP ==================== -->
+<h3>Item 3 — Result Count Cap (~500 per type) &nbsp;<span class="badge badge-pending">PENDING PRODUCT CONFIRMATION</span></h3>
+
+<p>
+  Every test has a result count difference between legacy and the adapter. The ODG v1.2 <code>/search</code> API caps results at approximately 500 per search type (ICD10, CPT, ICD9, etc.). The legacy system had no cap and could return thousands of rows.
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Direction</th>
+      <th>Cause</th>
+      <th>Example</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Adapter returns <em>more</em> results than legacy</td>
+      <td>Elasticsearch's broader tokenized matching surfaces results that SQL REGEXP did not find. Legacy result sets were often artificially small because abbreviations and alternate terms were not matched.</td>
+      <td>Symetra-TEST-4: legacy 24 results, adapter 500 (capped).</td>
+    </tr>
+    <tr>
+      <td>Adapter returns <em>fewer</em> results than legacy</td>
+      <td>ODG v1.2 caps results at ~500 per type. Legacy had no cap.</td>
+      <td>Symetra-TEST-8: legacy returned 98,767 ICD10 results for a broad term; adapter capped at 500.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="warn">
+  <strong>Product confirmation required:</strong> Confirm that the ~500-results-per-type cap in ODG v1.2 is acceptable for all legacy customers migrating to the adapter. If a specific customer requires a higher result limit, this would need to be raised with the ODG API team as a configuration change. No adapter code change is needed regardless of the decision.
+</div>
+
+<hr />
+
+<h2>Summary</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Item</th>
+      <th>Affected Tests</th>
+      <th>Affected Customer(s)</th>
+      <th>Action Required</th>
+      <th>Owner</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Elasticsearch improvements (Legacy 404/500 → Adapter 200)</td>
+      <td>17</td>
+      <td>HoneysuckleHealth, MLC, Symetra, paradigm</td>
+      <td>No adapter change. Adapter behavior confirmed correct. Advise customers that search quality is improved over legacy.</td>
+      <td><strong>Customer communication</strong></td>
+      <td><span class="badge badge-accepted">PRODUCT ACCEPTED</span></td>
+    </tr>
+    <tr>
+      <td>AU ICD10 country scope regression — MLC-TEST-33</td>
+      <td>1</td>
+      <td>MLC-ODGDEMO</td>
+      <td>Choose one of three options: (A) always pass <code>country=AU</code> for ICD10 searches — recommended; (B) per-customer country routing; (C) accept as known gap for AU customers.</td>
+      <td><strong>Product</strong></td>
+      <td><span class="badge badge-pending">PENDING PRODUCT DECISION</span></td>
+    </tr>
+    <tr>
+      <td>Result count cap (~500 per type)</td>
+      <td>All 175</td>
+      <td>All customers</td>
+      <td>Confirm that the ~500-results-per-type cap is acceptable for all customers migrating from legacy. Raise with ODG API team if a higher limit is required for any customer.</td>
+      <td><strong>Product / ODG API Team</strong></td>
+      <td><span class="badge badge-pending">PENDING PRODUCT CONFIRMATION</span></td>
+    </tr>
+  </tbody>
+</table>
+
+</body>
+</html>

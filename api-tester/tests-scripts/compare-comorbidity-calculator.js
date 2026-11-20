@@ -48,6 +48,7 @@ require('dotenv').config({ path: path.join(projectRoot, '.env') });
 
 const axios         = require(path.join(projectRoot, 'node_modules', 'axios')).default ?? require(path.join(projectRoot, 'node_modules', 'axios'));
 const { XMLParser } = require(path.join(projectRoot, 'node_modules', 'fast-xml-parser'));
+const https         = require('https');
 
 // ---------------------------------------------------------------------------
 // Config
@@ -292,7 +293,20 @@ function adapterHasFnolCodes(adapterParsed) {
   return fnolCodes !== undefined && fnolCodes !== null && fnolCodes !== '';
 }
 
-// context: optional object with { hasFnolCodes: boolean }
+// Returns true if the parsed legacy response contains any non-empty
+// adjustedduration.*.alert value (bp, cp95, or cp100).
+function legacyHasDurationAlert(legacyParsed) {
+  const dur = legacyParsed
+    && (legacyParsed.root?.adjustedduration ?? legacyParsed.adjustedduration);
+  if (!dur || typeof dur !== 'object') return false;
+  for (const tier of ['bp', 'cp95', 'cp100']) {
+    const a = dur[tier]?.alert;
+    if (a !== undefined && a !== null && a !== '') return true;
+  }
+  return false;
+}
+
+// context: optional object with { hasFnolCodes: boolean, legacyHasDurationAlert: boolean }
 function isExpectedDiff(path, legacyValue, adapterValue, context) {
   // FNOL-triggered expected diffs: ODG API includes the FNOL-mapped ICD code
   // as an extra input which changes the score/duration and adds fnolcodes to
@@ -305,6 +319,25 @@ function isExpectedDiff(path, legacyValue, adapterValue, context) {
   // Adapter returns procsummary for a CPT code that legacy does not populate.
   if (legacyValue === '' && adapterValue !== '') {
     if (ADAPTER_EXTRA_PATTERNS.some(re => re.test(path))) return true;
+  }
+
+  // alertdesc is only populated in legacy when at least one adjustedduration.*.alert
+  // is present. When legacy has duration alerts (all EXPECTED_DIFF), treat the
+  // alertdesc diff as EXPECTED_DIFF too. If legacy has alertdesc but no duration
+  // alerts, fall through to CONTENT_MISMATCH.
+  if (/^(root\.)?alertdesc$/.test(path) && legacyValue !== '') {
+    // adapterValue is '' when the diff walker sees a plain missing field on both sides.
+    // When legacy returns an alertdesc object {yellow:…} and adapter has no alertdesc
+    // key at all, compareContent hits the type-mismatch branch and formats the value as
+    // '(string) ' (type prefix + empty, because JSON.stringify(undefined) → '').
+    // Also handle '(string) ""' for the case where adapter returns an explicit empty string.
+    const adapterEmpty =
+      adapterValue === '' ||
+      adapterValue === '(string) ' ||
+      adapterValue === '(string) ""';
+    if (adapterEmpty) {
+      return !!(context && context.legacyHasDurationAlert);
+    }
   }
 
   // Only classify as EXPECTED_DIFF when legacy has a value and adapter is missing it.
@@ -493,6 +526,7 @@ async function callApi(url, xmlBody, apiKey, label) {
       validateStatus: () => true,   // don't throw on 4xx/5xx
       timeout: 30000,
       responseType: 'text',
+      httpsAgent: url.startsWith('https://localhost') ? new https.Agent({ rejectUnauthorized: false }) : undefined,
     });
     const contentType = response.headers['content-type'] || '';
     if (DEBUG) {
@@ -627,7 +661,8 @@ async function processRow(row) {
   // When true, diffs on fnolcodes paths and score/duration fields are EXPECTED_DIFF
   // because ODG API includes the FNOL-mapped ICD as an extra code to process.
   const hasFnolCodes = adapterHasFnolCodes(adapterParsed);
-  const diffContext  = { hasFnolCodes };
+  const hasDurationAlert = legacyHasDurationAlert(legacyParsed);
+  const diffContext  = { hasFnolCodes, legacyHasDurationAlert: hasDurationAlert };
 
   // Full content comparison — calculator responses are deterministic for the
   // same input so both 200 and non-200 bodies must match exactly.

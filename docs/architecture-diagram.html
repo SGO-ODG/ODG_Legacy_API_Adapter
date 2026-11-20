@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ODG Legacy API Adapter — Architecture &amp; Design</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #172B4D;
+      max-width: 1100px;
+      margin: 40px auto;
+      padding: 0 24px;
+      line-height: 1.6;
+    }
+    h1 { font-size: 26px; border-bottom: 2px solid #DFE1E6; padding-bottom: 8px; margin-top: 32px; color: #172B4D; }
+    h2 { font-size: 20px; border-bottom: 1px solid #DFE1E6; padding-bottom: 6px; margin-top: 36px; color: #0052CC; }
+    h3 { font-size: 15px; margin-top: 20px; color: #253858; }
+    p  { margin: 10px 0; }
+    ul, ol { margin: 10px 0 10px 24px; }
+    li { margin: 4px 0; }
+    code {
+      background: #F4F5F7;
+      border: 1px solid #DFE1E6;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 14px 0;
+      font-size: 13px;
+    }
+    th {
+      background: #F4F5F7;
+      color: #5E6C84;
+      font-weight: bold;
+      text-align: left;
+      padding: 8px 10px;
+      border: 1px solid #DFE1E6;
+    }
+    td {
+      border: 1px solid #DFE1E6;
+      padding: 7px 10px;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #F4F5F7; }
+    .note {
+      background: #DEEBFF;
+      border-left: 4px solid #0052CC;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .warn {
+      background: #FFFAE6;
+      border-left: 4px solid #FF8B00;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .success {
+      background: #E3FCEF;
+      border-left: 4px solid #00875A;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .danger {
+      background: #FFEBE6;
+      border-left: 4px solid #DE350B;
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin: 12px 0;
+    }
+    .badge {
+      display: inline-block;
+      border-radius: 3px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+    .badge-blue   { background: #DEEBFF; color: #0747A6; border: 1px solid #4C9AFF; }
+    .badge-green  { background: #E3FCEF; color: #006644; border: 1px solid #57D9A3; }
+    .badge-orange { background: #FFEBE6; color: #BF2600; border: 1px solid #FF5630; }
+    .badge-purple { background: #EAE6FF; color: #403294; border: 1px solid #998DD9; }
+    .badge-yellow { background: #FFFAE6; color: #974F0C; border: 1px solid #FFE380; }
+    .badge-grey   { background: #F4F5F7; color: #5E6C84; border: 1px solid #C1C7D0; }
+    hr { border: none; border-top: 1px solid #DFE1E6; margin: 32px 0; }
+
+    /* Architecture diagram table */
+    .arch-table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 12px; }
+    .arch-table td { border: 1px solid #C1C7D0; padding: 8px 10px; vertical-align: middle; text-align: center; }
+    .arch-zone-label { background: #F4F5F7; color: #5E6C84; font-weight: bold; font-size: 11px; letter-spacing: .05em; }
+    .arch-layer-entry    { background: #DEEBFF; color: #0747A6; }
+    .arch-layer-format   { background: #E6FCFF; color: #006580; }
+    .arch-layer-auth     { background: #EAE6FF; color: #403294; }
+    .arch-layer-route    { background: #FFFAE6; color: #974F0C; }
+    .arch-layer-xform    { background: #FFF0E6; color: #BF2600; }
+    .arch-layer-client   { background: #E3FCEF; color: #006644; }
+    .arch-layer-serial   { background: #F3F0FF; color: #403294; }
+    .arch-layer-logger   { background: #F4F5F7; color: #5E6C84; }
+    .arch-external       { background: #F4F5F7; color: #172B4D; border: 1px solid #DFE1E6; }
+    .arch-db             { background: #EAE6FF; color: #403294; }
+    .arch-odg            { background: #E3FCEF; color: #006644; }
+    .arch-arrow          { background: #FFFFFF; color: #97A0AF; font-size: 18px; border: none; padding: 2px; }
+
+    /* Component cards via table */
+    .cards-table { border-collapse: collapse; width: 100%; margin: 14px 0; }
+    .cards-table td { border: 1px solid #DFE1E6; padding: 12px 14px; vertical-align: top; width: 33%; }
+    .card-title { font-weight: bold; color: #172B4D; font-size: 13px; margin: 0 0 2px; }
+    .card-file  { color: #0052CC; font-size: 11px; font-family: "Courier New", monospace; margin: 0 0 6px; }
+    .card-desc  { color: #5E6C84; font-size: 12px; margin: 0; }
+  </style>
+</head>
+<body>
+
+<h1>ODG Legacy API Adapter — Architecture &amp; Design</h1>
+<p style="color:#5E6C84;font-size:13px;">
+  Node.js / Express &nbsp;·&nbsp; TypeScript &nbsp;·&nbsp; Azure App Service &nbsp;·&nbsp;
+  PostgreSQL &nbsp;·&nbsp; ODG API v1.2 &nbsp;·&nbsp; November 2026
+</p>
+
+<hr />
+
+<!-- ═══════════════════════════════════════════
+     1. PURPOSE
+     ═══════════════════════════════════════════ -->
+<h2>1. Purpose</h2>
+<p>
+  The ODG Legacy API Adapter is a temporary compatibility bridge that allows existing legacy customers
+  to continue sending requests to the original CodeIgniter PHP API contract while the adapter
+  translates those calls into <strong>ODG API v1.2</strong> calls behind the scenes.
+  Customers see zero change: the same HTTP paths, headers, XML request bodies, and response shapes
+  they have always used continue to work without modification.
+</p>
+<p>
+  The adapter is scoped to <strong>already-subscribed legacy customers only</strong> — no new
+  customers are provisioned through it. All five supported routes are live. All other legacy routes
+  return a <code>SERVICE_NOT_EXIST</code> (403) error.
+</p>
+<div class="note">
+  <strong>In scope:</strong> UR Advisor, Best Practice Guide, One Search, Comorbidity Calculator, Reserve Calculator (5 routes).<br />
+  <strong>Out of scope:</strong> NDC Advisor, NDC Download, ProcSum, SumGuide — all return 403 and are not approximated.
+</div>
+
+<hr />
+
+<!-- ═══════════════════════════════════════════
+     2. HIGH-LEVEL ARCHITECTURE DIAGRAM
+     ═══════════════════════════════════════════ -->
+<h2>2. High-Level Architecture</h2>
+
+<p>The diagram below shows the three external actors and all processing layers within the adapter.</p>
+
+<table class="arch-table">
+  <tr>
+    <td style="width:16%;" class="arch-zone-label">LEGACY CUSTOMERS</td>
+    <td style="width:2%;" class="arch-arrow"></td>
+    <td style="width:64%;" class="arch-zone-label">ODG LEGACY API ADAPTER &nbsp;(Azure App Service — Node.js / Express)</td>
+    <td style="width:2%;" class="arch-arrow"></td>
+    <td style="width:16%;" class="arch-zone-label">ODG API v1.2</td>
+  </tr>
+  <tr>
+    <td rowspan="9" class="arch-external" style="font-size:12px;line-height:1.8;">
+      Insurance Co A<br/>Insurance Co B<br/>Insurance Co C<br/>TPA / System<br/><br/>
+      <span style="color:#97A0AF;font-size:11px;">
+        X-ODG-KEY header<br/>GET / POST XML<br/>← XML or JSON
+      </span>
+    </td>
+    <td rowspan="9" class="arch-arrow" style="font-size:20px;">⇄</td>
+    <td class="arch-layer-entry">
+      <strong>1 · Express Entry</strong><br/>
+      <span style="color:#0747A6;">express.raw({ type:'*/*' }) &nbsp;·&nbsp; /health &nbsp;·&nbsp; Routes: /restws &amp; /calculator</span>
+    </td>
+    <td rowspan="9" class="arch-arrow" style="font-size:20px;">⇄</td>
+    <td rowspan="9" class="arch-odg" style="font-size:12px;line-height:2;">
+      <code>/tao/icds</code><br/>
+      <code>/tao/procedures</code><br/>
+      <code>/tao/fnol/{bp}/{noi}</code><br/>
+      <code>/guidelines</code><br/>
+      <code>/search</code><br/>
+      <code>/calculator</code>
+    </td>
+  </tr>
+  <tr>
+    <td class="arch-layer-format">
+      <strong>2 · Format Selector Middleware</strong><br/>
+      <span style="color:#006580;">Detects /format/json suffix → res.locals.legacyFormat = 'xml' | 'json'</span>
+    </td>
+  </tr>
+  <tr>
+    <td class="arch-layer-auth">
+      <strong>3 · Legacy Auth Middleware</strong><br/>
+      <span style="color:#403294;">
+        X-ODG-KEY → companymaster lookup → disabled check → serviceRegistry check<br/>
+        → companywebservice lookup → subscription date range enforcement<br/>
+        Attaches req.legacy · Returns exact legacy 403/405 error on failure
+      </span>
+    </td>
+  </tr>
+  <tr>
+    <td class="arch-layer-route">
+      <strong>4 · Route Handlers</strong><br/>
+      <span style="color:#974F0C;">GET /uradvisor &nbsp;·&nbsp; GET /bpguide &nbsp;·&nbsp; POST /onesearch &nbsp;·&nbsp; POST /comorbidity &nbsp;·&nbsp; POST /reserve</span>
+    </td>
+  </tr>
+  <tr>
+    <td class="arch-layer-xform">
+      <strong>5 · Request Transformers / Parsers</strong><br/>
+      <span style="color:#BF2600;">Parse legacy input (query params / CI path segments / XML body) · Validate legacy semantics · Build upstream ODG API request</span>
+    </td>
+  </tr>
+  <tr>
+    <td class="arch-layer-client">
+      <strong>6 · ODG API Client (Axios) + Token Cache</strong><br/>
+      <span style="color:#006644;">
+        Retrieve cached Bearer token (or fetch via OAuth client_credentials)<br/>
+        Authorization: Bearer · X-ApiVersion: 1.2 · 30s timeout · On 401: invalidate → retry once
+      </span>
+    </td>
+  </tr>
+  <tr>
+    <td class="arch-layer-xform">
+      <strong>7 · Response Transformers</strong><br/>
+      <span style="color:#BF2600;">Map ODG JSON → legacy model · Deep-lowercase keys (except primaryRTWpath) · null→"" · undefined fields stripped</span>
+    </td>
+  </tr>
+  <tr>
+    <td class="arch-layer-serial">
+      <strong>8 · Serializers</strong><br/>
+      <span style="color:#403294;">XML: legacy root/wrapper elements, ordering preserved · JSON: legacy field casing, singleton/array, clientid/rescount envelope</span>
+    </td>
+  </tr>
+  <tr>
+    <td class="arch-layer-logger">
+      <strong>9 · Usage Logger (fire-and-forget)</strong><br/>
+      <span style="color:#5E6C84;">res.on('finish') → INSERT to webserviceusage · Never delays customer response · USAGE_LOGGING_ENABLED=Y</span>
+    </td>
+  </tr>
+  <tr>
+    <td class="arch-zone-label"></td>
+    <td class="arch-arrow"></td>
+    <td colspan="1" class="arch-db" style="text-align:center;">
+      <strong>PostgreSQL</strong> (Azure Database for PostgreSQL Flexible Server)<br/>
+      <span style="font-size:12px;">
+        companymaster (read) &nbsp;·&nbsp; companywebservice (read) &nbsp;·&nbsp; webserviceusage (write, fire-and-forget)
+      </span>
+    </td>
+    <td class="arch-arrow"></td>
+    <td class="arch-external" style="font-size:12px;text-align:center;">
+      <strong>OAuth Server</strong><br/>POST /token<br/>client_credentials
+    </td>
+  </tr>
+</table>
+
+<div class="note" style="font-size:12px;">
+  <strong>Reading the diagram:</strong> All customer requests flow left → right through layers 1–9.
+  The OAuth token fetch (layer 6 → OAuth Server) happens only on cache miss or expiry — all customer requests share one cached Bearer token.
+  The usage log write (layer 9 → PostgreSQL) happens asynchronously after the response is already sent to the customer.
+</div>
+
+<hr />
+
+<!-- ═══════════════════════════════════════════
+     3. REQUEST PROCESSING PIPELINE
+     ═══════════════════════════════════════════ -->
+<h2>3. Request Processing Pipeline</h2>
+<p>Every authenticated customer request passes through these layers in order:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:4%;">#</th>
+      <th style="width:18%;">Layer</th>
+      <th style="width:24%;">Source file</th>
+      <th>What it does</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td><span class="badge badge-blue">Express Entry</span></td>
+      <td><code>src/app.ts</code></td>
+      <td>Receives raw HTTP request. <code>express.raw({ type:'*/*' })</code> captures the body as a Buffer regardless of Content-Type — mirrors legacy PHP's <code>file_get_contents("php://input")</code>. Routes to <code>/restws</code> or <code>/calculator</code>.</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><span class="badge badge-blue">Format Selector</span></td>
+      <td><code>src/middleware/formatSelector.ts</code></td>
+      <td>Checks whether the URL path contains <code>/format/json</code>. Sets <code>res.locals.legacyFormat = 'json' | 'xml'</code> for downstream use. Default is XML.</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><span class="badge badge-purple">Legacy Auth</span></td>
+      <td><code>src/middleware/legacyAuth.ts</code></td>
+      <td>6-step validation chain: read <code>X-ODG-KEY</code> header → lookup <code>companymaster</code> → check <code>disabled</code> flag → verify service in static registry → lookup <code>companywebservice</code> → enforce subscription date range. Attaches <code>req.legacy</code> context. Returns exact legacy 403/405 error body on failure.</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><span class="badge badge-yellow">Route Handler</span></td>
+      <td><code>src/routes/restws.ts</code><br/><code>src/routes/calculator.ts</code></td>
+      <td>Dispatches to the correct endpoint handler. Validates HTTP method (e.g. POST on <code>/uradvisor</code> returns 405). Orchestrates the transformer chain.</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><span class="badge badge-orange">Request Transformer</span></td>
+      <td><code>src/transformers/*.ts</code><br/><code>src/parsers/*.ts</code></td>
+      <td>Parses legacy input (query params, CI path segments, or XML body). Validates legacy semantics. Builds the upstream ODG v1.2 request object with correct field names, jobClass/NCCI handling, ICD family detection, deduplication, and country code.</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td><span class="badge badge-green">ODG API Client</span></td>
+      <td><code>src/upstream/odgClient.ts</code><br/><code>src/auth/tokenCache.ts</code></td>
+      <td>Retrieves cached Bearer token (or fetches one via OAuth). Calls ODG API with <code>Authorization: Bearer</code> and <code>X-ApiVersion: 1.2</code>. On 401, invalidates cache, fetches once, retries. Serializes array params in repeated-key format. 30 s timeout.</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td><span class="badge badge-orange">Response Transformer</span></td>
+      <td><code>src/transformers/*.ts</code></td>
+      <td>Maps ODG JSON response to the complete legacy model: field renaming, deep-lowercase keys (except <code>primaryRTWpath</code>), null→"", undefined fields stripped, array vs singleton rules, currency formatting, date formatting.</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td><span class="badge badge-purple">Serializer</span></td>
+      <td><code>src/serializers/legacyResponse.ts</code><br/><code>src/serializers/xmlBuilder.ts</code></td>
+      <td>Serializes the legacy model to XML or JSON. XML preserves legacy root/wrapper element names and ordering. JSON preserves legacy field casing, singleton/array behavior, and <code>clientid</code>/<code>rescount</code> envelope.</td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td><span class="badge badge-grey">Usage Logger</span></td>
+      <td><code>src/middleware/usageLogger.ts</code></td>
+      <td>Fires on <code>res.on('finish')</code> — after the response is sent. Inserts one row to <code>webserviceusage</code>. Never delays or affects the customer response. Controlled by <code>USAGE_LOGGING_ENABLED=Y</code>. Never logs the X-ODG-KEY or Bearer token.</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<!-- ═══════════════════════════════════════════
+     4. SUPPORTED ROUTES
+     ═══════════════════════════════════════════ -->
+<h2>4. Supported Routes</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Legacy Route</th>
+      <th>Method</th>
+      <th>Service Code</th>
+      <th>ODG v1.2 Endpoints</th>
+      <th>Input Format</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>/restws/uradvisor[/format/json]</code></td>
+      <td><span class="badge badge-green">GET</span></td>
+      <td><code>URADVISOR</code></td>
+      <td><code>/tao/icds</code><br/><code>/tao/procedures</code><br/><code>/tao/fnol/{bp}/{noi}</code></td>
+      <td>Query params / CI path segments</td>
+      <td>ICD-driven → <code>/tao/icds</code>. Reverse lookup (icd=9|10) → <code>/tao/procedures</code>. FNOL-only → <code>/tao/fnol</code>. Falls back to FNOL when ICD returns no results. <code>outputMode=F</code> → <code>FullOutput=1</code>.</td>
+    </tr>
+    <tr>
+      <td><code>/restws/bpguide[/format/json]</code></td>
+      <td><span class="badge badge-green">GET</span></td>
+      <td><code>BPGUIDE</code></td>
+      <td><code>/guidelines</code><br/><code>/tao/fnol/{bp}/{noi}</code></td>
+      <td>Query params / CI path segments</td>
+      <td>ICD arrays split by family (ICD-9 vs ICD-10 by leading letter). FNOL resolves via <code>/tao/fnol</code> → <code>data.icds[]</code>. PT/chiro visit range takes lower bound.</td>
+    </tr>
+    <tr>
+      <td><code>/restws/onesearch[/format/json]</code></td>
+      <td><span class="badge badge-orange">POST XML</span></td>
+      <td><code>ONESEARCH</code></td>
+      <td><code>/search</code></td>
+      <td>XML body (<code>&lt;text&gt;</code> element)</td>
+      <td>Supported types: <code>icd9search</code>, <code>icd10search</code>, <code>procedurescpt</code>, <code>formularyndc</code>, <code>treatment</code>.</td>
+    </tr>
+    <tr>
+      <td><code>/calculator/comorbidity[/format/json]</code></td>
+      <td><span class="badge badge-orange">POST XML</span></td>
+      <td><code>COMORBIDITY</code></td>
+      <td><code>/calculator</code></td>
+      <td>XML body</td>
+      <td><code>requestedoutput=RasAndRtw</code>. Returns <code>riskassessment</code> + <code>adjustedduration</code> (omitted when <code>medicalonly</code>) + <code>adjustedsummaryguidelines</code>. No <code>projectedcosts</code>.</td>
+    </tr>
+    <tr>
+      <td><code>/calculator/reserve[/format/json]</code></td>
+      <td><span class="badge badge-orange">POST XML</span></td>
+      <td><code>RESERVE</code></td>
+      <td><code>/calculator</code></td>
+      <td>XML body</td>
+      <td><code>requestedoutput=RasRtwCosts</code>. Always returns <code>projectedcosts</code>. Returns <code>adjustedduration</code> only when <code>fulloutput=Y</code>. No <code>adjustedsummaryguidelines</code>.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="warn">
+  <strong>Excluded routes:</strong> <code>/restws/ndcadvisor</code>, <code>/restws/ndcdownload</code>,
+  <code>/restws/procsum</code>, <code>/restws/sumguide</code> — all return
+  <code>SERVICE_NOT_EXIST</code> (403) and are not approximated with any ODG v1.2 endpoint.
+</div>
+
+<hr />
+
+<!-- ═══════════════════════════════════════════
+     5. AUTHENTICATION & OAUTH
+     ═══════════════════════════════════════════ -->
+<h2>5. Authentication &amp; OAuth Token Flow</h2>
+
+<h3>How Legacy Customers Authenticate</h3>
+<p>
+  Customers send their existing <code>X-ODG-KEY</code> header — no changes are required on the customer side.
+  The adapter validates this key against PostgreSQL before making any upstream call.
+</p>
+<ol>
+  <li>Read <code>X-ODG-KEY</code> from request header → missing/unknown = 403</li>
+  <li>Lookup <code>companymaster</code> → <code>disabled = 'Y'</code> = 403</li>
+  <li>Check requested path segment against static <code>serviceRegistry</code> → not found = 403</li>
+  <li>Lookup <code>companywebservice</code> for (companyCode, serviceCode) → missing = 403</li>
+  <li>Enforce <code>subscriptionStartDate</code> → before start = 403 with start date</li>
+  <li>Enforce <code>subscriptionEndDate</code> → after end = 403 with expiry date</li>
+</ol>
+
+<h3>How the Adapter Authenticates to ODG APIs</h3>
+<p>
+  A single shared <code>ODG_API_CLIENT_ID</code> / <code>ODG_API_CLIENT_SECRET</code> is used for all
+  customer calls via OAuth 2.0 Client Credentials flow. These credentials live in <code>.env</code> /
+  Azure Key Vault only — never in the database.
+</p>
+<ul>
+  <li>Bearer token is cached in memory, shared across all customer requests</li>
+  <li>Cache key built from non-secret fields (token URL + client ID + audience + scopes)</li>
+  <li>Single-flight mechanism prevents concurrent token fetches during refresh</li>
+  <li>Skew: <code>min(OAUTH_TOKEN_EXPIRY_SKEW_SECONDS, 10% of token lifetime)</code></li>
+  <li>On upstream 401: invalidate → fetch one new token → retry once — never surfaces to customer</li>
+</ul>
+
+<h3>Credential Isolation</h3>
+<table>
+  <thead>
+    <tr><th>Party</th><th>Knows</th><th>Does NOT know</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Legacy Customer</td>
+      <td>Their own <code>X-ODG-KEY</code></td>
+      <td>OAuth credentials, Bearer token, ODG API base URL, company identity used upstream</td>
+    </tr>
+    <tr>
+      <td>Adapter</td>
+      <td><code>X-ODG-KEY</code> (validates only, never logged or returned), ODG client credentials, Bearer token</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td>ODG API v1.2</td>
+      <td>Bearer token, request payload</td>
+      <td><code>X-ODG-KEY</code>, customer company identity</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<!-- ═══════════════════════════════════════════
+     6. DATABASE SCHEMA
+     ═══════════════════════════════════════════ -->
+<h2>6. Database Schema (PostgreSQL)</h2>
+
+<h3>companymaster — read-only</h3>
+<table>
+  <thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>companyCode</code></td><td>varchar(20) PK</td><td>Identifies the company from the <code>X-ODG-KEY</code> lookup</td></tr>
+    <tr><td><code>companyName</code></td><td>varchar(50)</td><td>Display name</td></tr>
+    <tr><td><code>webserviceKey</code></td><td>varchar(50)</td><td>The secret key — validated only, never logged or returned to any caller</td></tr>
+    <tr><td><code>disabled</code></td><td>char(1)</td><td><code>'Y'</code> → reject with 403 "Your account is disabled."</td></tr>
+    <tr><td><code>accountManagerEmail</code></td><td>varchar(80)</td><td>Reference only</td></tr>
+    <tr><td><code>salesManagerEmail</code></td><td>varchar(80)</td><td>Reference only</td></tr>
+  </tbody>
+</table>
+
+<h3>companywebservice — read-only</h3>
+<table>
+  <thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>id</code></td><td>int AI PK</td><td>Primary key</td></tr>
+    <tr><td><code>companyCode</code></td><td>varchar(20)</td><td>FK to companymaster</td></tr>
+    <tr><td><code>webserviceCode</code></td><td>varchar(20)</td><td>URADVISOR / BPGUIDE / ONESEARCH / COMORBIDITY / RESERVE</td></tr>
+    <tr><td><code>subscriptionStartDate</code></td><td>date</td><td>Inclusive start — 403 "Your subscription will start from MM/DD/YYYY." if before</td></tr>
+    <tr><td><code>subscriptionEndDate</code></td><td>date</td><td>Inclusive end — 403 "Your subscription is expired on MM/DD/YYYY." if after</td></tr>
+    <tr><td><code>outputMode</code></td><td>varchar(1)</td><td><code>'F'</code> → UR Advisor full output (<code>FullOutput=1</code>). Other values → streamlined.</td></tr>
+  </tbody>
+</table>
+
+<h3>webserviceusage — write-only, fire-and-forget</h3>
+<table>
+  <thead><tr><th>Column</th><th>Type</th><th>Captured from</th></tr></thead>
+  <tbody>
+    <tr><td><code>id</code></td><td>serial PK</td><td>Auto-generated</td></tr>
+    <tr><td><code>companyCode</code></td><td>varchar(20)</td><td><code>req.legacy.companyCode</code></td></tr>
+    <tr><td><code>webserviceCode</code></td><td>varchar(20)</td><td><code>req.legacy.serviceCode</code></td></tr>
+    <tr><td><code>clientHost</code></td><td>varchar(45)</td><td><code>req.ip</code> — IP address of the calling client</td></tr>
+    <tr><td><code>requestReceived</code></td><td>timestamptz</td><td>Auto (DEFAULT CURRENT_TIMESTAMP on server)</td></tr>
+    <tr><td><code>requestBody</code></td><td>text</td><td>Raw XML body (POST requests)</td></tr>
+    <tr><td><code>queryParameters</code></td><td>text</td><td>Full URL with query string (GET requests)</td></tr>
+    <tr><td><code>clientId</code></td><td>varchar(30)</td><td>Optional <code>clientid</code> param passed by customer</td></tr>
+    <tr><td><code>resultCode</code></td><td>varchar(5)</td><td>HTTP status code returned to customer</td></tr>
+    <tr><td><code>contentType</code></td><td>varchar(255)</td><td>Request content-type header</td></tr>
+    <tr><td><code>acceptHeader</code></td><td>varchar(255)</td><td>Effective response format (XML or JSON)</td></tr>
+    <tr><td><code>serverResponseTime</code></td><td>integer</td><td>Milliseconds from request receipt to response sent</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  Usage logging is controlled by <code>USAGE_LOGGING_ENABLED=Y</code> in <code>.env</code>.
+  Write errors are logged to <code>stderr</code> only — they never surface to the customer or affect the response.
+  The <code>X-ODG-KEY</code> and Bearer token are <strong>never</strong> written to this table.
+</div>
+
+<hr />
+
+<!-- ═══════════════════════════════════════════
+     7. KEY SOURCE COMPONENTS
+     ═══════════════════════════════════════════ -->
+<h2>7. Key Source Components</h2>
+
+<table class="cards-table">
+  <tr>
+    <td>
+      <div class="card-title">app.ts</div>
+      <div class="card-file">src/app.ts</div>
+      <div class="card-desc">Creates the Express application. Mounts <code>/restws</code> and <code>/calculator</code> routers. Registers <code>/health</code> probe and global error handler. <code>express.raw</code> body parser for all routes.</div>
+    </td>
+    <td>
+      <div class="card-title">legacyAuth middleware</div>
+      <div class="card-file">src/middleware/legacyAuth.ts</div>
+      <div class="card-desc">Enforces the complete legacy auth contract. Runs before every endpoint handler. Returns exact legacy error messages on failure (403/405). Attaches <code>req.legacy</code> (companyCode, serviceCode, subscription).</div>
+    </td>
+    <td>
+      <div class="card-title">tokenCache</div>
+      <div class="card-file">src/auth/tokenCache.ts</div>
+      <div class="card-desc">In-memory Map keyed by non-secret cache key. Single-flight prevents concurrent token fetches. Expiry includes configurable skew. For multi-instance deployments, replace with Azure Cache for Redis.</div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <div class="card-title">odgClient</div>
+      <div class="card-file">src/upstream/odgClient.ts</div>
+      <div class="card-desc">Axios instance with <code>X-ApiVersion: 1.2</code>, 30 s timeout, and repeated-key param serializer (<code>icd10=A&amp;icd10=B</code> not <code>icd10[]=A</code>). Automatic 401 → invalidate → retry. Throws <code>UpstreamError</code> — never raw upstream bodies to callers.</div>
+    </td>
+    <td>
+      <div class="card-title">Transformers</div>
+      <div class="card-file">src/transformers/urAdvisor.ts · bpGuide.ts · oneSearch.ts · calculator.ts</div>
+      <div class="card-desc">Each transformer is self-contained: parse → validate → build upstream request → handle ODG response → build legacy model. No cross-transformer dependencies.</div>
+    </td>
+    <td>
+      <div class="card-title">Serializers</div>
+      <div class="card-file">src/serializers/legacyResponse.ts · xmlBuilder.ts</div>
+      <div class="card-desc">XML serializer preserves legacy element ordering and wraps in root/response elements. JSON serializer preserves field casing. Both apply null→"" and strip undefined fields.</div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <div class="card-title">usageLogger</div>
+      <div class="card-file">src/middleware/usageLogger.ts</div>
+      <div class="card-desc">Hooks <code>res.on('finish')</code>. Measures wall-clock response time. Writes one row to <code>webserviceusage</code> asynchronously. Never blocks or throws to the request handler.</div>
+    </td>
+    <td>
+      <div class="card-title">serviceRegistry</div>
+      <div class="card-file">src/config/serviceRegistry.ts</div>
+      <div class="card-desc">Static map of 5 active services. Replaces the old <code>webservicemaster</code> database table. Any path segment not in the map produces <code>SERVICE_NOT_EXIST</code> (403) during auth.</div>
+    </td>
+    <td>
+      <div class="card-title">legacyErrors</div>
+      <div class="card-file">src/errors/legacyErrors.ts</div>
+      <div class="card-desc">Typed error catalogue with exact legacy message text and HTTP status codes. All error paths reference this catalogue — no inline error strings in route handlers or transformers.</div>
+    </td>
+  </tr>
+</table>
+
+<hr />
+
+<!-- ═══════════════════════════════════════════
+     8. AZURE DEPLOYMENT
+     ═══════════════════════════════════════════ -->
+<h2>8. Azure Deployment</h2>
+
+<table>
+  <thead>
+    <tr><th>Resource</th><th>Terraform type</th><th>Configuration</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>App Service</td>
+      <td><code>azurerm_linux_web_app</code></td>
+      <td>Node.js runtime · <code>app_command_line = "node dist/server.js"</code> · <code>health_check_path = "/health"</code></td>
+    </tr>
+    <tr>
+      <td>App Service Plan</td>
+      <td><code>azurerm_service_plan</code></td>
+      <td>B1+ (always-on required to keep token cache warm and avoid cold-start latency)</td>
+    </tr>
+    <tr>
+      <td>PostgreSQL</td>
+      <td><code>azurerm_postgresql_flexible_server</code></td>
+      <td>v14+ · <code>PG_HOST = fqdn</code> · <code>PG_SSL = true</code></td>
+    </tr>
+    <tr>
+      <td>Key Vault</td>
+      <td><code>azurerm_key_vault_secret</code></td>
+      <td>Stores <code>PG_PASSWORD</code> and <code>ODG_API_CLIENT_SECRET</code> as Key Vault references in app settings — never plaintext</td>
+    </tr>
+    <tr>
+      <td>Application Insights</td>
+      <td><code>azurerm_application_insights</code></td>
+      <td>Telemetry, performance monitoring, error tracking</td>
+    </tr>
+    <tr>
+      <td>Virtual Network + Private Endpoints</td>
+      <td><code>azurerm_virtual_network</code></td>
+      <td>Private App↔DB connectivity — PostgreSQL not exposed to the public internet</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="warn">
+  <strong>Secrets rule:</strong> <code>PG_PASSWORD</code> and <code>ODG_API_CLIENT_SECRET</code> must be
+  Key Vault references in Terraform app settings — never plaintext.
+  <code>LEGACY_PHP_REFERENCE_ROOT</code> and any <code>MYSQL_*</code> variables must be
+  <strong>omitted</strong> from Azure app settings entirely.
+</div>
+
+<div class="note">
+  <strong>Multi-instance scale-out:</strong> The in-memory OAuth token cache works for a single App Service instance.
+  For horizontal scale-out, replace <code>src/auth/tokenCache.ts</code> with Azure Cache for Redis
+  so all instances share one cached token.
+</div>
+
+<hr />
+
+<!-- ═══════════════════════════════════════════
+     9. RESPONSE SERIALIZATION CONTRACT
+     ═══════════════════════════════════════════ -->
+<h2>9. Response Serialization Rules</h2>
+
+<table>
+  <thead><tr><th>Rule</th><th>Detail</th></tr></thead>
+  <tbody>
+    <tr><td>Format selection</td><td>XML by default. JSON only when path contains exactly <code>/format/json</code>. No <code>Accept</code> header negotiation.</td></tr>
+    <tr><td>Key casing</td><td>All response keys deep-lowercased <em>except</em> <code>primaryRTWpath</code> which preserves mixed case.</td></tr>
+    <tr><td>Null values</td><td>Serialized as empty string <code>""</code> in both XML and JSON. Never emitted as the literal string <code>"null"</code>.</td></tr>
+    <tr><td>Undefined fields</td><td>Stripped from output entirely — not included in XML or JSON response.</td></tr>
+    <tr><td>Array vs singleton</td><td>Matches legacy PHP contract exactly: single-element arrays may serialize as singletons in XML depending on element type.</td></tr>
+    <tr><td>Upstream params</td><td>Repeated-key format without brackets: <code>icd10=A&amp;icd10=B</code>, not <code>icd10[]=A&amp;icd10[]=B</code>.</td></tr>
+    <tr><td>Currency</td><td>Reserve Calculator cost fields formatted as currency strings matching legacy format.</td></tr>
+    <tr><td>ICD normalization</td><td>Trailing-dot ICD codes preserved in calculator (<code>keepTrailingDot: true</code>). ICD family detected by leading letter (ICD-10) vs digit-only (ICD-9).</td></tr>
+  </tbody>
+</table>
+
+<hr />
+
+<!-- ═══════════════════════════════════════════
+     10. ENVIRONMENT VARIABLES
+     ═══════════════════════════════════════════ -->
+<h2>10. Environment Variables</h2>
+
+<table>
+  <thead><tr><th>Variable</th><th>Required</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>NODE_ENV</code></td><td>Yes</td><td><code>development</code> | <code>production</code></td></tr>
+    <tr><td><code>PORT</code></td><td>Yes</td><td>HTTP listen port (default <code>3000</code>)</td></tr>
+    <tr><td><code>PG_HOST</code></td><td>Yes</td><td>PostgreSQL server hostname / FQDN</td></tr>
+    <tr><td><code>PG_PORT</code></td><td>Yes</td><td>PostgreSQL port (default <code>5432</code>)</td></tr>
+    <tr><td><code>PG_DATABASE</code></td><td>Yes</td><td>Database name</td></tr>
+    <tr><td><code>PG_USER</code></td><td>Yes</td><td>Database user</td></tr>
+    <tr><td><code>PG_PASSWORD</code></td><td>Yes</td><td>Database password — Key Vault reference in Azure</td></tr>
+    <tr><td><code>PG_SSL</code></td><td>Yes</td><td><code>true</code> in Azure; <code>false</code> for local dev</td></tr>
+    <tr><td><code>ODG_API_CLIENT_ID</code></td><td>Yes</td><td>Shared OAuth client ID</td></tr>
+    <tr><td><code>ODG_API_CLIENT_SECRET</code></td><td>Yes</td><td>Shared OAuth client secret — Key Vault reference in Azure</td></tr>
+    <tr><td><code>ODG_API_BASE_URL</code></td><td>Yes</td><td>e.g. <code>https://api.odgbymcg.com</code></td></tr>
+    <tr><td><code>ODG_API_VERSION</code></td><td>Yes</td><td>Sent as <code>X-ApiVersion</code> header. Currently <code>1.2</code>.</td></tr>
+    <tr><td><code>OAUTH_TOKEN_URL</code></td><td>Yes</td><td>OAuth token endpoint URL</td></tr>
+    <tr><td><code>OAUTH_GRANT_TYPE</code></td><td>Yes</td><td><code>client_credentials</code></td></tr>
+    <tr><td><code>OAUTH_AUDIENCE</code></td><td>If required</td><td>Optional OAuth audience value</td></tr>
+    <tr><td><code>OAUTH_SCOPES</code></td><td>If required</td><td>Optional space-delimited scopes</td></tr>
+    <tr><td><code>OAUTH_TOKEN_EXPIRY_SKEW_SECONDS</code></td><td>No</td><td>Safety margin before expiry (default 60 s). Actual skew = <code>min(this, 10% of lifetime)</code>.</td></tr>
+    <tr><td><code>ODG_DEBUG_PAYLOADS</code></td><td>No</td><td><code>Y</code> enables verbose request/response logging. <strong>Must be <code>N</code> in production.</strong></td></tr>
+    <tr><td><code>USAGE_LOGGING_ENABLED</code></td><td>No</td><td><code>Y</code> enables writes to <code>webserviceusage</code>. Default off.</td></tr>
+    <tr><td><code>LEGACY_PHP_REFERENCE_ROOT</code></td><td>Dev only</td><td>Path to PHP checkout for contract reference. <strong>Omit from Azure app settings entirely.</strong></td></tr>
+  </tbody>
+</table>
+
+</body>
+</html>
